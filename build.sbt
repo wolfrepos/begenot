@@ -7,7 +7,12 @@ lazy val root = (project in file("."))
     libraryDependencies ++= List(
       "io.github.apimorphism" %% "telegramium-core" % "7.65.0",
       "io.github.apimorphism" %% "telegramium-high" % "7.65.0",
-      "is.cir" %% "ciris" % "3.1.0",
-      "org.typelevel" %% "log4cats-slf4j" % "2.5.0"
-    )
+      "is.cir" %% "ciris" % "3.1.0"
+    ),
+    assembly / assemblyJarName := "app.jar"
   )
+
+ThisBuild / assemblyMergeStrategy := {
+  case PathList("META-INF", "versions", "9", xs @ _*) => MergeStrategy.first
+  case x => (ThisBuild / assemblyMergeStrategy).value(x)
+}

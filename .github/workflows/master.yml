@@ -1,0 +1,55 @@
+name: master
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  Test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'corretto'
+          java-version: 11
+          cache: 'sbt'
+      - name: test
+        run: |
+          sbt test
+
+  Deploy:
+    if: ${{ github.ref == 'refs/heads/master' }}
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'corretto'
+          java-version: 11
+          cache: 'sbt'
+      - name: Assembly
+        run: |
+          sbt "clean; set (assembly / test) := {}; assembly"
+      - name: deploy
+        uses: garygrossgarten/github-action-scp@release
+        with:
+          local: target/scala-2.13/app.jar
+          remote: /tmp/${{ github.sha }}.jar
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+      - name: Update app
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+          script: |
+            cp /tmp/${{ github.sha }}.jar ~/begenot/app.jar
+            sudo systemctl restart begenot
