@@ -1,6 +1,5 @@
 package wolfcode.repository
 
-import cats.data.NonEmptyList
 import cats.effect.IO
 import doobie._
 import doobie.implicits._
@@ -10,40 +9,38 @@ import wolfcode.model.Offer
 
 import java.time.OffsetDateTime
 
-trait OfferRepository {
+trait SpiritOfferRepository {
   def put(offer: Offer): IO[Unit]
-  def ftSearch(words: NonEmptyList[String]): IO[List[Offer]]
+  def get(id: Int): IO[Option[Offer]]
 }
 
-object OfferRepository {
-  def create(tx: Transactor[IO]): OfferRepository =
-    new OfferRepository {
+object SpiritOfferRepository {
+  def create(tx: Transactor[IO]): SpiritOfferRepository =
+    new SpiritOfferRepository {
       override def put(offer: Offer): IO[Unit] =
         putQuery(offer)
           .run
           .transact(tx)
           .void
 
-      override def ftSearch(words: NonEmptyList[String]): IO[List[Offer]] =
-        ftSearchQuery(words)
-          .to[List]
+      override def get(id: Int): IO[Option[Offer]] =
+        getQuery(id)
+          .option
           .transact(tx)
     }
 
   def putQuery(offer: Offer): Update0 = {
     import offer._
     sql"""
-       INSERT INTO offers (description, photo_ids, publish_time, owner_id)
+       INSERT INTO offer_spirits (description, photo_ids, publish_time, owner_id)
        VALUES ($description, ${photoIds.mkString(sep)}, $publishTime, $ownerId)
        """.update
   }
 
-  def ftSearchQuery(words: NonEmptyList[String]): Query0[Offer] =
+  def getQuery(id: Int): Query0[Offer] =
     sql"""
        SELECT id, description, photo_ids, publish_time, owner_id
-       FROM offers, to_tsquery('russian', ${words.toList.mkString("|")}) as q
-       WHERE to_tsvector('russian', description) @@ q
-       ORDER BY ts_rank(to_tsvector('russian', description), q) DESC;
+       FROM offer_spirits WHERE id = $id
        """
       .query[(Int, String, String, OffsetDateTime, Long)]
       .map {

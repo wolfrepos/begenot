@@ -5,7 +5,7 @@ import cats.effect.IO
 import doobie._
 import doobie.implicits._
 import doobie.postgres.implicits._
-import wolfcode.Offer
+import wolfcode.model.Offer
 
 import java.time.OffsetDateTime
 

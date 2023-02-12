@@ -1,5 +1,5 @@
 
-CREATE TABLE IF NOT EXISTS account (
+CREATE TABLE IF NOT EXISTS accounts (
     id BIGINT PRIMARY KEY
 );
 

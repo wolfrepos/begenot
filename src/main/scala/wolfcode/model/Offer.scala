@@ -1,8 +1,8 @@
-package wolfcode
+package wolfcode.model
 
 import java.time.OffsetDateTime
 
-case class Offer(id: Int = 0,
+case class Offer(id: Int,
                  description: String,
                  photoIds: List[String],
                  publishTime: OffsetDateTime,
