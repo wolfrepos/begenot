@@ -9,6 +9,9 @@ lazy val root = (project in file("."))
   .settings(
     name := "begenot",
     libraryDependencies ++= List(
+      "com.dimafeng" %% "testcontainers-scala-core" % "0.40.12" % Test,
+      "com.dimafeng" %% "testcontainers-scala-postgresql" % "0.40.12" % Test,
+      "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.40.12" % Test,
       "io.github.apimorphism" %% "telegramium-core" % "7.65.0",
       "io.github.apimorphism" %% "telegramium-high" % "7.65.0",
       "is.cir" %% "ciris" % "3.1.0",
@@ -16,9 +19,7 @@ lazy val root = (project in file("."))
       "org.tpolecat" %% "doobie-core" % "1.0.0-RC2",
       "org.tpolecat" %% "doobie-postgres" % "1.0.0-RC2",
       "org.tpolecat" %% "doobie-scalatest" % "1.0.0-RC2" % Test,
-      "com.dimafeng" %% "testcontainers-scala-core" % "0.40.12" % Test,
-      "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.40.12" % Test,
-      "com.dimafeng" %% "testcontainers-scala-postgresql" % "0.40.12" % Test
+      "org.typelevel" %% "mouse" % "1.2.1"
     ),
     assembly / assemblyJarName := "app.jar"
   )
