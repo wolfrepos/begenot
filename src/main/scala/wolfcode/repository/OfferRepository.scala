@@ -18,13 +18,25 @@ trait OfferRepository {
 object OfferRepository {
   def create(tx: Transactor[IO]): OfferRepository =
     new OfferRepository {
-      override def put(offer: Offer): IO[Unit] = ???
+      override def put(offer: Offer): IO[Unit] =
+        putQuery(offer)
+          .run
+          .transact(tx)
+          .void
 
       override def ftSearch(words: NonEmptyList[String]): IO[List[Offer]] =
         ftSearchQuery(words)
           .to[List]
           .transact(tx)
     }
+
+  def putQuery(offer: Offer): Update0 = {
+    import offer._
+    sql"""
+       INSERT INTO offers (description, photo_ids, publish_time, owner_id)
+       VALUES ($description, ${photoIds.mkString(sep)}, $publishTime, $ownerId)
+       """.update
+  }
 
   def ftSearchQuery(words: NonEmptyList[String]): Query0[Offer] =
     sql"""
@@ -36,6 +48,8 @@ object OfferRepository {
       .query[(Int, String, String, OffsetDateTime, Long)]
       .map {
         case (id, description, photoIds, publishTime, ownerId) =>
-          Offer(id, description, photoIds.split("&").toList, publishTime, ownerId)
+          Offer(id, description, photoIds.split(sep).toList, publishTime, ownerId)
       }
+
+  val sep = "&"
 }
