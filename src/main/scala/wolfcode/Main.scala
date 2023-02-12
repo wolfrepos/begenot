@@ -1,6 +1,7 @@
 package wolfcode
 
 import cats.effect._
+import org.flywaydb.core.Flyway
 import org.http4s.blaze.client.BlazeClientBuilder
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import telegramium.bots.high._
@@ -12,10 +13,22 @@ object Main extends IOApp {
     for {
       config <- Config.create.load
       _ <- logger.info(s"loaded config: $config")
+      _ <- flywayMigrate(config)
       _ <- BlazeClientBuilder[IO].resource.use { httpClient =>
         implicit val api: Api[IO] = BotApi(httpClient, baseUrl = s"https://api.telegram.org/bot${config.token}")
         new LongPollGate().start()
       }
     } yield ExitCode.Success
   }
+
+  def flywayMigrate(config: Config): IO[Unit] =
+    IO {
+      import config._
+      Flyway
+        .configure()
+        .dataSource(dbUrl, dbUser, dbPass)
+        .baselineOnMigrate(true)
+        .load()
+        .migrate()
+    }
 }

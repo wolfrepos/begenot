@@ -1,0 +1,8 @@
+#!/bin/bash
+
+sbt \
+  -Dtg.token=${TG_TOKEN} \
+  -Ddb.url=jdbc:postgresql://localhost:5432/begenot \
+  -Ddb.user=begenot \
+  -Ddb.pass=begenot \
+  run
