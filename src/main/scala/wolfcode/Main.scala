@@ -15,10 +15,11 @@ object Main extends IOApp {
       config <- Config.create.load
       _ <- logger.info(s"loaded config: $config")
       _ <- flywayMigrate(config)
+      // TODO: create Ref as Resource and save in on release
       ref <- Ref.of[IO, Map[Long, State]](Map.empty)
       _ <- BlazeClientBuilder[IO].resource.use { httpClient =>
         implicit val api: Api[IO] = BotApi(httpClient, baseUrl = s"https://api.telegram.org/bot${config.token}")
-        new LongPollGate(ref).start()
+        new LongPollHandler(ref).start()
       }
     } yield ExitCode.Success
   }
