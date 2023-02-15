@@ -14,7 +14,6 @@ import wolfcode.model.State.{Drafting, Idle, Viewing}
 import wolfcode.model.{Draft, Offer, State}
 
 import java.time.OffsetDateTime
-import scala.concurrent.duration.DurationInt
 
 class LongPollHandler(states: Ref[IO, Map[Long, State]])(implicit api: Api[IO]) extends LongPoll[IO](api) {
   private val logger = Slf4jLogger.getLogger[IO]
@@ -28,14 +27,13 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]])(implicit api: Api[IO]) 
         case (Some("/start"), _, _) => sendInstructions(greet = true)
         case (Some(text), Some(Drafting(draft)), _) => updateDraft(draft, text = text.some)
         case (_, state, photoSizes) if photoSizes.nonEmpty =>
-          logger.info(s"xxx ${(msg.text, state, NonEmptyList.fromList(msg.photo))}") >>
-            updateDraft(
-              draft = state match {
-                case Some(Drafting(draft)) => draft
-                case _ => Draft.create(chatId, OffsetDateTime.now)
-              },
-              photo = photoSizes.maxByOption(_.width).map(_.fileId)
-            )
+          updateDraft(
+            draft = state match {
+              case Some(Drafting(draft)) => draft
+              case _ => Draft.create(chatId, OffsetDateTime.now)
+            },
+            photo = photoSizes.maxByOption(_.width).map(_.fileId)
+          )
         case (Some(text), Some(Viewing(offers)), _) if text.startsWith("еще") => sendOffers(offers.toList)
         case (Some(text), None | Some(Idle | Viewing(_)), _) => searchOffers(text)
         case _ => sendInstructions()
@@ -45,14 +43,8 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]])(implicit api: Api[IO]) 
 
   private def sendInstructions(greet: Boolean = false)(implicit chatId: Long): IO[Unit] = {
     states.update(_.updated(chatId, State.Idle)) >>
-      Methods.sendMessage(
-        chatId = ChatIntId(chatId),
-        text = "Привет!"
-      ).exec.whenA(greet) >>
-      Methods.sendMessage(
-        chatId = ChatIntId(chatId),
-        text = "Здесь будет инструкция как пользоваться ботом"
-      ).exec.void
+      sendText("Привет!") >>
+      sendText("Здесь будет инструкция как пользоваться ботом")
   }
 
   private def searchOffers(text: String)(implicit chatId: Long): IO[Unit] = {
@@ -64,27 +56,13 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]])(implicit api: Api[IO]) 
     offers match {
       case Nil =>
         states.update(_.updated(chatId, Idle)) >>
-          Methods.sendMessage(
-            chatId = ChatIntId(chatId),
-            text = s"Для вашего запроса не нашлось предложений"
-          ).exec.void
+          sendText("По Вашему запросу не нашлось предложений(")
       case offer :: Nil =>
         states.update(_.updated(chatId, Idle)) >>
-          Methods.sendMessage(
-            chatId = ChatIntId(chatId),
-            text = s"Последнее предложение",
-            replyMarkup = ReplyKeyboardRemove(true).some
-          ).exec.void
+          sendOffer(offer)
       case offer :: next :: rest =>
         states.update(_.updated(chatId, Viewing(NonEmptyList.of(next, rest: _*)))) >>
-          Methods.sendMessage(
-            chatId = ChatIntId(chatId),
-            text = s"Предложение $offer",
-            replyMarkup = singleButton(
-              KeyboardButton(s"еще ${rest.length + 1}"),
-              resizeKeyboard = true.some
-            ).some
-          ).exec.void
+          sendOffer(offer, rest.length + 1)
     }
 
   private def updateDraft(draft: Draft,
@@ -96,20 +74,47 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]])(implicit api: Api[IO]) 
     )
     if (newDraft.isReady)
       states.update(_.updated(chatId, Idle)) >>
-        Methods.sendMessage(
-          chatId = ChatIntId(chatId),
-          text = s"Ваше объявление будет опубликовано после проверки"
-        ).exec.void
-    else {
+        sendText("Ваше объявление будет опубликовано после проверки")
+    else
       states.update(_.updated(chatId, Drafting(newDraft))) >>
-        Methods.sendMessage(
-          chatId = ChatIntId(chatId),
-          text = s"Добавьте описание товара/услуги, укажите стоимость"
-            + " и другие важные детали чтобы на него откликнулось больше людей"
-        ).exec.void.whenA(newDraft.description.isEmpty && newDraft.photoIds.length == 1) >>
-        IO.sleep(2.seconds)
-    }
+        sendText(
+          """
+            |Добавьте описание товара/услуги
+            |укажите стоимость и другие важные детали
+            |чтобы на него откликнулось больше людей
+            |""".stripMargin
+        ).whenA(newDraft.description.isEmpty && newDraft.photoIds.length == 1)
   }
 
-  private val offer = Offer(1, "", List(""), OffsetDateTime.now(), 1)
+  private def sendText(text: String)(implicit chatId: Long): IO[Unit] =
+    Methods.sendMessage(
+      chatId = ChatIntId(chatId),
+      text = text
+    ).exec.void
+
+  private def sendOffer(offer: Offer, left: Int = 0)(implicit chatId: Long): IO[Unit] =
+    Methods.sendMediaGroup(
+      chatId = ChatIntId(chatId),
+      media = offer.photoIds.map(InputMediaPhoto(_))
+    ).exec.void >>
+      Methods.sendMessage(
+        chatId = ChatIntId(chatId),
+        text = offer.description,
+        replyMarkup = singleButton(
+          KeyboardButton(s"еще $left"),
+          resizeKeyboard = true.some
+        ).some
+      ).exec.void
+
+  private val offer = Offer(
+    id = 1,
+    description =
+      """
+        |Продам процессор intel core i3 12100f
+        |Процессор со встроенной графикой
+        |""".stripMargin,
+    photoIds = List("AgACAgIAAxkBAAIJ42PsqrAgEFe5rdyW1jNXtHrbYtSfAAKpwzEbCDlgS_4PrjvMgqsHAQADAgADeQADLgQ"),
+    publishTime = OffsetDateTime.now(),
+    ownerId = 1
+  )
 }
