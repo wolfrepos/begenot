@@ -10,10 +10,10 @@ import java.time.OffsetDateTime
 
 class DraftRepositoryTest extends AnyFunSuite with IOChecker with PostgresSetup {
   test("putQuery") {
-    check(DraftRepository.putQuery(Draft(1L, "".some, ""::Nil, OffsetDateTime.now())))
+    check(DraftRepository.putQuery(Draft(0, 1L, "".some, ""::Nil, OffsetDateTime.now())))
   }
 
   test("getQuery") {
-    check(DraftRepository.getQuery(ownerId = 1L))
+    check(DraftRepository.getOldestQuery)
   }
 }

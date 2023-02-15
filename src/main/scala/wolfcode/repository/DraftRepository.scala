@@ -1,53 +1,52 @@
 package wolfcode.repository
 
 import cats.effect.IO
+import cats.implicits.catsSyntaxOptionId
 import doobie._
 import doobie.implicits._
 import doobie.postgres.implicits._
 import doobie.util.transactor.Transactor
-import mouse.all._
 import wolfcode.model.Draft
 
 import java.time.OffsetDateTime
 
 trait DraftRepository {
-  def put(draft: Draft): IO[Unit]
-  def get(id: Int): IO[Option[Draft]]
+  def put(offer: Draft): IO[Unit]
+  def getOldest: IO[Option[Draft]]
 }
 
 object DraftRepository {
   def create(tx: Transactor[IO]): DraftRepository =
     new DraftRepository {
-      override def put(draft: Draft): IO[Unit] =
-        putQuery(draft)
+      override def put(offer: Draft): IO[Unit] =
+        putQuery(offer)
           .run
           .transact(tx)
           .void
 
-      override def get(ownerId: Int): IO[Option[Draft]] =
-        getQuery(ownerId)
+      override def getOldest: IO[Option[Draft]] =
+        getOldestQuery
           .option
           .transact(tx)
     }
 
-  def putQuery(draft: Draft): Update0 = {
-    import draft._
-    val photoIdsOpt = photoIds.nonEmpty.option(photoIds.mkString(sep))
+  def putQuery(offer: Draft): Update0 = {
+    import offer._
     sql"""
-       INSERT INTO drafts (owner_id, description, photo_ids, create_time)
-       VALUES ($ownerId, $description, $photoIdsOpt, $createTime)
+       INSERT INTO drafts (description, photo_ids, create_time, owner_id)
+       VALUES ($description, ${photoIds.mkString(sep)}, $createTime, $ownerId)
        """.update
   }
 
-  def getQuery(ownerId: Long): Query0[Draft] =
+  val getOldestQuery: Query0[Draft] =
     sql"""
-       SELECT owner_id, description, photo_ids, create_time
-       FROM drafts WHERE owner_id = $ownerId
+       SELECT id, description, photo_ids, create_time, owner_id
+       FROM drafts ORDER BY create_time ASC LIMIT 1
        """
-      .query[(Long, Option[String], Option[String], OffsetDateTime)]
+      .query[(Int, String, String, OffsetDateTime, Long)]
       .map {
-        case (ownerId, description, photoIds, createTime) =>
-          Draft(ownerId, description, photoIds.fold(List.empty[String])(_.split(sep).toList), createTime)
+        case (id, description, photoIds, createTime, ownerId) =>
+          Draft(id, ownerId, description.some, photoIds.split(sep).toList, createTime)
       }
 
   val sep = "&"
