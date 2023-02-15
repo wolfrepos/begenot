@@ -1,10 +1,10 @@
 
-CREATE TABLE IF NOT EXISTS drafts (
+CREATE TABLE IF NOT EXISTS pending_offers (
     id SERIAL PRIMARY KEY,
     description TEXT NOT NULL,
     photo_ids VARCHAR NOT NULL,
-    create_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    publish_time TIMESTAMP WITH TIME ZONE NOT NULL,
     owner_id BIGINT NOT NULL
 );
 
-CREATE INDEX create_time_idx ON drafts (create_time);
+CREATE INDEX publish_time_idx ON pending_offers (publish_time);

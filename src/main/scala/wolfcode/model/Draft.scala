@@ -1,5 +1,8 @@
 package wolfcode.model
 
+import cats.data.NonEmptyList
+import cats.implicits.catsSyntaxTuple2Semigroupal
+
 import java.time.OffsetDateTime
 
 case class Draft(id: Int,
@@ -7,8 +10,17 @@ case class Draft(id: Int,
                  description: Option[String],
                  photoIds: List[String],
                  createTime: OffsetDateTime) {
-  def isReady: Boolean =
-    photoIds.nonEmpty && description.nonEmpty
+  def toOffer: Option[Offer] =
+    (description, NonEmptyList.fromList(photoIds)).mapN {
+      case (desc, pIds) =>
+        Offer(
+          id = id,
+          ownerId = ownerId,
+          description = desc,
+          photoIds = pIds.toList,
+          publishTime = createTime
+        )
+    }
 }
 
 object Draft {

@@ -1,11 +1,15 @@
 package wolfcode
 
 import cats.effect._
+import doobie.hikari.HikariTransactor
+import doobie.util.ExecutionContexts
 import org.flywaydb.core.Flyway
 import org.http4s.blaze.client.BlazeClientBuilder
+import org.http4s.client.Client
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import telegramium.bots.high._
 import wolfcode.model.State
+import wolfcode.repository.{PendingOfferRepository, OfferRepository}
 
 object Main extends IOApp {
   private val logger = Slf4jLogger.getLogger[IO]
@@ -15,14 +19,40 @@ object Main extends IOApp {
       config <- Config.create.load
       _ <- logger.info(s"loaded config: $config")
       _ <- flywayMigrate(config)
-      // TODO: create Ref as Resource and save in on release
-      ref <- Ref.of[IO, Map[Long, State]](Map.empty)
-      _ <- BlazeClientBuilder[IO].resource.use { httpClient =>
-        implicit val api: Api[IO] = BotApi(httpClient, baseUrl = s"https://api.telegram.org/bot${config.token}")
-        new LongPollHandler(ref).start()
+      _ <- resources(config).use {
+        case (client, tx, ref) =>
+          val draftRepository = PendingOfferRepository.create(tx)
+          val offerRepository = OfferRepository.create(tx)
+          implicit val api: Api[IO] = BotApi(client, baseUrl = s"https://api.telegram.org/bot${config.token}")
+          new LongPollHandler(
+            ref,
+            draftRepository,
+            offerRepository
+          ).start()
       }
     } yield ExitCode.Success
   }
+
+  private def resources(config: Config): Resource[IO,
+    (Client[IO], HikariTransactor[IO], Ref[IO, Map[Long, State]])
+  ] =
+    for {
+      tranEc <- ExecutionContexts.cachedThreadPool[IO]
+      tx <- HikariTransactor.newHikariTransactor[IO](
+        "org.postgresql.Driver",
+        config.dbUrl,
+        config.dbUser,
+        config.dbPass,
+        tranEc
+      )
+      // TODO:
+      // on acquire load state of the draft from the db
+      // on release save the draft to the db
+      ref <- Resource.make(Ref.of[IO, Map[Long, State]](Map.empty)) {
+        _ => IO.unit
+      }
+      client <- BlazeClientBuilder[IO].resource
+    } yield (client, tx, ref)
 
   def flywayMigrate(config: Config): IO[Unit] =
     IO {

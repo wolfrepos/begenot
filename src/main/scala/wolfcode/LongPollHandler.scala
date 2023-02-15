@@ -12,10 +12,13 @@ import telegramium.bots.high.keyboards.ReplyKeyboardMarkups._
 import telegramium.bots.high.{Api, Methods}
 import wolfcode.model.State.{Drafting, Idle, Viewing}
 import wolfcode.model.{Draft, Offer, State}
+import wolfcode.repository.{PendingOfferRepository, OfferRepository}
 
 import java.time.OffsetDateTime
 
-class LongPollHandler(states: Ref[IO, Map[Long, State]])(implicit api: Api[IO]) extends LongPoll[IO](api) {
+class LongPollHandler(states: Ref[IO, Map[Long, State]],
+                      pendingOfferRepository: PendingOfferRepository,
+                      offerRepository: OfferRepository)(implicit api: Api[IO]) extends LongPoll[IO](api) {
   private val logger = Slf4jLogger.getLogger[IO]
 
   override def onMessage(msg: Message): IO[Unit] = {
@@ -47,16 +50,28 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]])(implicit api: Api[IO]) 
       sendText("Здесь будет инструкция как пользоваться ботом")
   }
 
-  private def searchOffers(text: String)(implicit chatId: Long): IO[Unit] = {
-    val foundOffers = NonEmptyList.of(offer, offer, offer)
-    sendOffers(foundOffers.toList)
-  }
+  private def searchOffers(text: String)(implicit chatId: Long): IO[Unit] =
+    NonEmptyList.fromList {
+      text
+        .filter(c => c.isLetterOrDigit || c.isWhitespace)
+        .split("\\s+")
+        .map(_.trim)
+        .filterNot(_.isEmpty)
+        .toList
+    } match {
+      case Some(words) =>
+        offerRepository
+          .ftSearch(words)
+          .flatMap(sendOffers)
+      case None =>
+        IO.unit
+    }
 
   private def sendOffers(offers: List[Offer])(implicit chatId: Long): IO[Unit] =
     offers match {
       case Nil =>
         states.update(_.updated(chatId, Idle)) >>
-          sendText("По Вашему запросу не нашлось предложений(")
+          sendText(s"${Emoji.penciveFace} по Вашему запросу не нашлось предложений")
       case offer :: Nil =>
         states.update(_.updated(chatId, Idle)) >>
           sendOffer(offer)
@@ -72,24 +87,29 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]])(implicit api: Api[IO]) 
       description = text,
       photoIds = photo.fold(draft.photoIds)(_ :: draft.photoIds)
     )
-    if (newDraft.isReady)
-      states.update(_.updated(chatId, Idle)) >>
-        sendText("Ваше объявление будет опубликовано после проверки")
-    else
-      states.update(_.updated(chatId, Drafting(newDraft))) >>
-        sendText(
-          """
-            |Добавьте описание товара/услуги
-            |укажите стоимость и другие важные детали
-            |чтобы на него откликнулось больше людей
-            |""".stripMargin
-        ).whenA(newDraft.description.isEmpty && newDraft.photoIds.length == 1)
+    newDraft.toOffer match {
+      case Some(offer) =>
+        states.update(_.updated(chatId, Idle)) >>
+          pendingOfferRepository.put(offer) >>
+          sendText(s"${Emoji.check} Ваше объявление будет опубликовано после проверки")
+      case None =>
+        states.update(_.updated(chatId, Drafting(newDraft))) >>
+          sendText(
+            s"""
+               |${Emoji.smilingFace} Отлично!
+               |
+               |Теперь опишите Ваш товар или услугу
+               |Укажите стоимость и другие важные детали чтобы на него откликнулось больше людей
+               |""".stripMargin
+          ).whenA(newDraft.description.isEmpty && newDraft.photoIds.length == 1)
+    }
   }
 
   private def sendText(text: String)(implicit chatId: Long): IO[Unit] =
     Methods.sendMessage(
       chatId = ChatIntId(chatId),
-      text = text
+      text = text,
+      replyMarkup = ReplyKeyboardRemove(removeKeyboard = true).some
     ).exec.void
 
   private def sendOffer(offer: Offer, left: Int = 0)(implicit chatId: Long): IO[Unit] =
@@ -100,21 +120,19 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]])(implicit api: Api[IO]) 
       Methods.sendMessage(
         chatId = ChatIntId(chatId),
         text = offer.description,
-        replyMarkup = singleButton(
-          KeyboardButton(s"еще $left"),
-          resizeKeyboard = true.some
-        ).some
+        replyMarkup =
+          if (left == 0)
+            ReplyKeyboardRemove(removeKeyboard = true).some
+          else
+            singleButton(
+              KeyboardButton(s"еще $left"),
+              resizeKeyboard = true.some
+            ).some
       ).exec.void
 
-  private val offer = Offer(
-    id = 1,
-    description =
-      """
-        |Продам процессор intel core i3 12100f
-        |Процессор со встроенной графикой
-        |""".stripMargin,
-    photoIds = List("AgACAgIAAxkBAAIJ42PsqrAgEFe5rdyW1jNXtHrbYtSfAAKpwzEbCDlgS_4PrjvMgqsHAQADAgADeQADLgQ"),
-    publishTime = OffsetDateTime.now(),
-    ownerId = 1
-  )
+  object Emoji {
+    val check = "✅"
+    val penciveFace = "\uD83D\uDE14"
+    val smilingFace = "☺️"
+  }
 }

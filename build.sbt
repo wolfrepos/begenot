@@ -17,6 +17,7 @@ lazy val root = (project in file("."))
       "is.cir" %% "ciris" % "3.1.0",
       "org.flywaydb" % "flyway-core" % "9.14.1",
       "org.tpolecat" %% "doobie-core" % "1.0.0-RC2",
+      "org.tpolecat" %% "doobie-hikari" % "1.0.0-RC2",
       "org.tpolecat" %% "doobie-postgres" % "1.0.0-RC2",
       "org.tpolecat" %% "doobie-scalatest" % "1.0.0-RC2" % Test,
       "org.typelevel" %% "mouse" % "1.2.1"
