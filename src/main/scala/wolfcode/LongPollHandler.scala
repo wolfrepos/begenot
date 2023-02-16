@@ -61,6 +61,18 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
           case Viewing(offers) => sendOffers(offers.toList)
           case _ => IO.unit
         }
+      case Some(x) if x.startsWith("contact") =>
+        val userId = x.filter(_.isDigit).toInt
+        userRepository.get(userId).flatMap {
+          case Some(user) =>
+            Methods.sendContact(
+              chatId = ChatIntId(user.id),
+              firstName = user.firstName,
+              phoneNumber = user.phoneNumber
+            ).exec.void
+          case None =>
+            IO.unit
+        }
       case _ => IO.unit
     }
   }
@@ -68,7 +80,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
   def job: IO[Unit] = {
     val admin = Random.shuffle(admins).head
     pendingOfferRepository
-      .getOldest.attempt
+      .getOldestForPublish.attempt
       .flatMap {
         case Right(Some(offer)) =>
           sendOffer(offer)(admin) >>

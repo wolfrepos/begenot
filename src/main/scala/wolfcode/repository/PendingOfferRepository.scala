@@ -14,7 +14,7 @@ import java.time.OffsetDateTime
 trait PendingOfferRepository {
   def put(offer: Offer): IO[Unit]
   def get(id: Int): IO[Option[Offer]]
-  def getOldest: IO[Option[Offer]]
+  def getOldestForPublish: IO[Option[Offer]]
   def delete(id: Int): IO[Unit]
   def publish(id: Int): IO[Option[Offer]]
   def decline(id: Int): IO[Option[Offer]]
@@ -29,8 +29,8 @@ object PendingOfferRepository {
       override def get(id: Int): IO[Option[Offer]] =
         getQuery(id).option.transact(tx)
 
-      override def getOldest: IO[Option[Offer]] =
-        getOldestQuery.option.transact(tx)
+      override def getOldestForPublish: IO[Option[Offer]] =
+        getOldestForPublishQuery.option.transact(tx)
 
       override def delete(id: Int): IO[Unit] =
         deleteQuery(id).run.transact(tx).void
@@ -70,10 +70,12 @@ object PendingOfferRepository {
           Offer(id, description, photoIds.split(sep).toList, createTime, ownerId)
       }
 
-  val getOldestQuery: Query0[Offer] =
+  val getOldestForPublishQuery: Query0[Offer] =
     sql"""
-       SELECT id, description, photo_ids, publish_time, owner_id
-       FROM pending_offers ORDER BY publish_time ASC LIMIT 1
+       SELECT t1.id, t1.description, t1.photo_ids, t1.publish_time, t1.owner_id
+       FROM pending_offers t1
+       INNER JOIN users t2 ON t1.owner_id = t2.id
+       ORDER BY publish_time ASC LIMIT 1
        """
       .query[(Int, String, String, OffsetDateTime, Long)]
       .map {

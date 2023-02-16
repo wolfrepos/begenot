@@ -11,7 +11,7 @@ class PendingOfferRepositoryTest extends AnyFunSuite with IOChecker with Postgre
   test("queries") {
     check(PendingOfferRepository.putQuery(Offer(0, "", "" :: Nil, OffsetDateTime.now(), 1L)))
     check(PendingOfferRepository.getQuery(0))
-    check(PendingOfferRepository.getOldestQuery)
+    check(PendingOfferRepository.getOldestForPublishQuery)
     check(PendingOfferRepository.deleteQuery(0))
   }
 }
