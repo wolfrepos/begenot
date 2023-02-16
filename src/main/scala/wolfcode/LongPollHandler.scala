@@ -53,8 +53,20 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
   override def onCallbackQuery(query: CallbackQuery): IO[Unit] = {
     implicit val chatId: Long = query.from.id
     query.data match {
-      case Some(x) if x.startsWith("publish") && admins.contains(query.from.id) => publishOffer(x.filter(_.isDigit).toInt)
-      case Some(x) if x.startsWith("decline") && admins.contains(query.from.id) => declineOffer(x.filter(_.isDigit).toInt)
+      case Some(x) if x.startsWith("publish") && admins.contains(query.from.id) =>
+        publishOffer(x.filter(_.isDigit).toInt) >>
+          Methods.editMessageText(
+            text = s"${Emoji.check} Опубликовано",
+            chatId = query.message.map(_.chat.id).map(ChatIntId),
+            messageId = query.message.map(_.messageId)
+          ).exec.void
+      case Some(x) if x.startsWith("decline") && admins.contains(query.from.id) =>
+        declineOffer(x.filter(_.isDigit).toInt)
+        Methods.editMessageText(
+          text = s"${Emoji.cross} Отклонено",
+          chatId = query.message.map(_.chat.id).map(ChatIntId),
+          messageId = query.message.map(_.messageId)
+        ).exec.void
       case Some("help") => sendInstructions()(query.from.id)
       case Some("next") =>
         states.get.map(_.getOrElse(chatId, State.Idle)).flatMap {
@@ -68,7 +80,8 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
             Methods.sendContact(
               chatId = ChatIntId(chatId),
               firstName = user.firstName,
-              phoneNumber = user.phoneNumber
+              phoneNumber = user.phoneNumber,
+              replyToMessageId = query.message.map(_.messageId)
             ).exec.void
           case None =>
             IO.unit
@@ -222,7 +235,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
     Methods.sendMediaGroup(
       chatId = ChatIntId(chatId),
       media = offer.photoIds.map(InputMediaPhoto(_))
-    ).exec.void >>
+    ).exec.attempt.void >>
       Methods.sendMessage(
         chatId = ChatIntId(chatId),
         text = offer.description,
