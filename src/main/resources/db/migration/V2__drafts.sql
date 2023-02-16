@@ -7,4 +7,4 @@ CREATE TABLE IF NOT EXISTS pending_offers (
     owner_id BIGINT NOT NULL
 );
 
-CREATE INDEX publish_time_idx ON pending_offers (publish_time);
+CREATE INDEX IF NOT EXISTS publish_time_idx ON pending_offers (publish_time);

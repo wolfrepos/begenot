@@ -1,6 +1,8 @@
 
-CREATE TABLE IF NOT EXISTS accounts (
-    id BIGINT PRIMARY KEY
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT PRIMARY KEY,
+    phone_number VARCHAR NOT NULL,
+    first_name VARCHAR NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS offers (

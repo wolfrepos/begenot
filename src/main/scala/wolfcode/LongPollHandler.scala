@@ -8,55 +8,62 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 import telegramium.bots.CirceImplicits.messageEncoder
 import telegramium.bots._
 import telegramium.bots.high.implicits._
-import telegramium.bots.high.keyboards.InlineKeyboardMarkups
-import telegramium.bots.high.keyboards.ReplyKeyboardMarkups._
+import telegramium.bots.high.keyboards.{InlineKeyboardMarkups, ReplyKeyboardMarkups}
 import telegramium.bots.high.{Api, Methods}
+import wolfcode.CustomExtractors._
 import wolfcode.model.State.{Drafting, Idle, Viewing}
-import wolfcode.model.{Draft, Offer, State}
-import wolfcode.repository.{OfferRepository, PendingOfferRepository}
+import wolfcode.model.{Draft, Offer, State, User => User0}
+import wolfcode.repository.{OfferRepository, PendingOfferRepository, UserRepository}
 
 import java.time.OffsetDateTime
 import scala.concurrent.duration.DurationInt
 import scala.util.Random
 
 class LongPollHandler(states: Ref[IO, Map[Long, State]],
-                      pendingOfferRepository: PendingOfferRepository,
-                      offerRepository: OfferRepository)(implicit api: Api[IO]) extends LongPoll[IO](api) {
+                      userRepository: UserRepository,
+                      offerRepository: OfferRepository,
+                      pendingOfferRepository: PendingOfferRepository)(implicit api: Api[IO]) extends LongPoll[IO](api) {
   private val logger = Slf4jLogger.getLogger[IO]
   private val admins = List(108683062L)
 
-  override def onMessage(msg: Message): IO[Unit] = {
-    implicit val chatId: Long = msg.chat.id
+  override def onMessage(message: Message): IO[Unit] = {
+    implicit val chatId: Long = message.chat.id
     for {
-      _ <- logger.info(s"got message: ${msg.asJson}")
-      state <- states.get.map(_.get(msg.chat.id))
-      _ <- (msg.text, state, msg.photo) match {
-        case (Some("/start"), _, _) => sendInstructions(greet = true)
-        case (Some(text), Some(Drafting(draft)), _) => updateDraft(draft, text = text.some)
-        case (_, state, photoSizes) if photoSizes.nonEmpty =>
+      _ <- logger.info(s"got message: ${message.asJson}")
+      state <- states.get.map(_.getOrElse(message.chat.id, State.Idle))
+      _ <- (message, state) match {
+        case (Contactt(c), _) => userRepository.upsert(User0(chatId, c.phoneNumber, c.firstName))
+        case (Text("/start"), _) => sendInstructions(greet = true)
+        case (PhotoId(photoId), state) =>
           updateDraft(
             draft = state match {
-              case Some(Drafting(draft)) => draft
+              case Drafting(draft) => draft
               case _ => Draft.create(chatId, OffsetDateTime.now)
             },
-            photo = photoSizes.maxByOption(_.width).map(_.fileId),
-            text = msg.caption
+            photoId = photoId.some,
+            text = message.caption
           )
-        case (Some(text), Some(Viewing(offers)), _) if text.startsWith("еще") => sendOffers(offers.toList)
-        case (Some(text), None | Some(Idle | Viewing(_)), _) => searchOffers(text)
+        case (Text(text), Drafting(draft)) => updateDraft(draft, text = text.some)
+        case (Text(text), Idle | Viewing(_)) => searchOffers(text)
         case _ => sendInstructions()
       }
     } yield ()
   }
 
-  override def onCallbackQuery(query: CallbackQuery): IO[Unit] =
-    if (!admins.contains(query.from.id)) IO.unit else {
-      query.data match {
-        case Some(x) if x.startsWith("publish") => publishOffer(x.filter(_.isDigit).toInt)
-        case Some(x) if x.startsWith("decline") => declineOffer(x.filter(_.isDigit).toInt)
-        case _ => IO.unit
-      }
+  override def onCallbackQuery(query: CallbackQuery): IO[Unit] = {
+    implicit val chatId: Long = query.from.id
+    query.data match {
+      case Some(x) if x.startsWith("publish") && admins.contains(query.from.id) => publishOffer(x.filter(_.isDigit).toInt)
+      case Some(x) if x.startsWith("decline") && admins.contains(query.from.id) => declineOffer(x.filter(_.isDigit).toInt)
+      case Some("help") => sendInstructions()(query.from.id)
+      case Some("next") =>
+        states.get.map(_.getOrElse(chatId, State.Idle)).flatMap {
+          case Viewing(offers) => sendOffers(offers.toList)
+          case _ => IO.unit
+        }
+      case _ => IO.unit
     }
+  }
 
   def job: IO[Unit] = {
     val admin = Random.shuffle(admins).head
@@ -113,7 +120,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
 
   private def sendInstructions(greet: Boolean = false)(implicit chatId: Long): IO[Unit] = {
     states.update(_.updated(chatId, State.Idle)) >>
-      sendText("Привет!") >>
+      sendText("Привет!").whenA(greet) >>
       sendText("Здесь будет инструкция как пользоваться ботом")
   }
 
@@ -138,7 +145,12 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
     offers match {
       case Nil =>
         states.update(_.updated(chatId, Idle)) >>
-          sendText(s"${Emoji.penciveFace} по Вашему запросу не нашлось предложений")
+          sendText(
+            s"${Emoji.penciveFace} по Вашему запросу не нашлось предложений",
+            keyboard = InlineKeyboardMarkups.singleButton(
+              InlineKeyboardButton("Помощь", callbackData = "help".some)
+            )
+          )
       case offer :: Nil =>
         states.update(_.updated(chatId, Idle)) >>
           sendOffer(offer)
@@ -149,21 +161,36 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
 
   private def updateDraft(draft: Draft,
                           text: Option[String] = None,
-                          photo: Option[String] = None)(implicit chatId: Long): IO[Unit] = {
+                          photoId: Option[String] = None)(implicit chatId: Long): IO[Unit] = {
     val newDraft = draft.copy(
-      description = text,
-      photoIds = photo.fold(draft.photoIds)(_ :: draft.photoIds)
+      description = text.orElse(draft.description),
+      photoIds = photoId.fold(draft.photoIds)(_ :: draft.photoIds)
     )
     newDraft.toOffer match {
       case Some(offer) =>
         states.update(_.updated(chatId, Idle)) >>
           pendingOfferRepository.put(offer) >>
-          sendText(s"${Emoji.check} Ваше объявление будет опубликовано после проверки")
+          userRepository.get(chatId).flatMap {
+            case Some(_) =>
+              sendText(s"${Emoji.check} Ваше объявление будет опубликовано после проверки")
+            case _ =>
+              sendText(
+                s"""
+                   |${Emoji.check} Ваше объявление будет опубликовано после проверки
+                   |
+                   |Чтобы пользователи знали как с Вами связаться, поделитесь Вашим контактом нажав кнопку ниже
+                   |""".stripMargin,
+                ReplyKeyboardMarkups.singleButton(
+                  KeyboardButton("Поделиться своим контактом", requestContact = true.some),
+                  resizeKeyboard = true.some
+                )
+              )
+          }
       case None =>
         states.update(_.updated(chatId, Drafting(newDraft))) >>
           sendText(
             s"""
-               |${Emoji.smilingFace} Отлично!
+               |${Emoji.smilingFace} Отлично - фотографии есть!
                |
                |Теперь опишите Ваш товар или услугу
                |Укажите стоимость и другие важные детали чтобы на него откликнулось больше людей
@@ -172,11 +199,11 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
     }
   }
 
-  private def sendText(text: String)(implicit chatId: Long): IO[Unit] =
+  private def sendText(text: String, keyboard: KeyboardMarkup = ReplyKeyboardRemove(removeKeyboard = true))(implicit chatId: Long): IO[Unit] =
     Methods.sendMessage(
       chatId = ChatIntId(chatId),
       text = text,
-      replyMarkup = ReplyKeyboardRemove(removeKeyboard = true).some
+      replyMarkup = keyboard.some
     ).exec.attempt.void
 
   private def sendOffer(offer: Offer, left: Int = 0)(implicit chatId: Long): IO[Unit] =
@@ -188,18 +215,17 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
         chatId = ChatIntId(chatId),
         text = offer.description,
         replyMarkup =
-          if (left == 0)
-            ReplyKeyboardRemove(removeKeyboard = true).some
-          else
-            singleButton(
-              KeyboardButton(s"еще $left"),
-              resizeKeyboard = true.some
-            ).some
+          InlineKeyboardMarkups.singleRow(
+            InlineKeyboardButton(s"Показать контакт", callbackData = s"contact${offer.ownerId}".some) :: {
+              if (left == 0) Nil else InlineKeyboardButton(s"${Emoji.downArrow} еще $left", callbackData = "next".some) :: Nil
+            }
+          ).some
       ).exec.void
 
   object Emoji {
     val check = "✅"
     val cross = "❌"
+    val downArrow = "⬇️"
     val penciveFace = "\uD83D\uDE14"
     val smilingFace = "☺️"
   }
