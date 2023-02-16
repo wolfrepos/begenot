@@ -61,12 +61,12 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
             messageId = query.message.map(_.messageId)
           ).exec.void
       case Some(x) if x.startsWith("decline") && admins.contains(query.from.id) =>
-        declineOffer(x.filter(_.isDigit).toInt)
-        Methods.editMessageText(
-          text = s"${Emoji.cross} Отклонено",
-          chatId = query.message.map(_.chat.id).map(ChatIntId),
-          messageId = query.message.map(_.messageId)
-        ).exec.void
+        declineOffer(x.filter(_.isDigit).toInt) >>
+          Methods.editMessageText(
+            text = s"${Emoji.cross} Отклонено",
+            chatId = query.message.map(_.chat.id).map(ChatIntId),
+            messageId = query.message.map(_.messageId)
+          ).exec.void
       case Some("help") => sendInstructions()(query.from.id)
       case Some("next") =>
         states.get.map(_.getOrElse(chatId, State.Idle)).flatMap {
@@ -145,8 +145,23 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
 
   private def sendInstructions(greet: Boolean = false)(implicit chatId: Long): IO[Unit] = {
     states.update(_.updated(chatId, State.Idle)) >>
-      sendText("Привет!").whenA(greet) >>
-      sendText("Здесь будет инструкция как пользоваться ботом")
+      sendText(
+        s"""
+           |Привет!
+           |Меня зовут Бегенот!
+           |Я помогу тебе продать/купить вещи
+           |
+           |Просто напиши что тебе нужно и я поищу предложения
+           |Или просто отправь фото вещи, которую ты хочешь продать
+           |
+           |Смотри как просто это сделать ${Emoji.smilingFace}
+           |""".stripMargin
+
+      ).whenA(greet) >>
+      Methods.sendVideo(
+        chatId = ChatIntId(chatId),
+        video = InputLinkFile(videoId)
+      ).exec.attempt.void
   }
 
   private def searchOffers(text: String)(implicit chatId: Long): IO[Unit] =
@@ -172,9 +187,10 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
         states.update(_.updated(chatId, Idle)) >>
           sendText(
             s"${Emoji.penciveFace} по Вашему запросу не нашлось предложений",
-            keyboard = InlineKeyboardMarkups.singleButton(
+            keyboard = InlineKeyboardMarkups.singleColumn(List(
+              InlineKeyboardButton(s"Мне повезёт ${Emoji.smilingFace}", callbackData = "help".some),
               InlineKeyboardButton("Помощь", callbackData = "help".some)
-            )
+            ))
           )
       case offer :: Nil =>
         states.update(_.updated(chatId, Idle)) >>
@@ -246,6 +262,8 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
             }
           ).some
       ).exec.void
+
+  private val videoId = "BAACAgIAAxkBAAICImPuZ1R07Fv3Otv0av8naAOtX2A9AAKnJAACW1N4S7zjcGCYQfVrLgQ"
 
   object Emoji {
     val check = "✅"
