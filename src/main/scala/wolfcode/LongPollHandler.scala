@@ -66,7 +66,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
         userRepository.get(userId).flatMap {
           case Some(user) =>
             Methods.sendContact(
-              chatId = ChatIntId(user.id),
+              chatId = ChatIntId(chatId),
               firstName = user.firstName,
               phoneNumber = user.phoneNumber
             ).exec.void
