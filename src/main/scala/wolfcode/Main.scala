@@ -21,14 +21,12 @@ object Main extends IOApp {
       _ <- flywayMigrate(config)
       _ <- resources(config).use {
         case (client, tx, ref) =>
+          implicit val api: Api[IO] = BotApi(client, baseUrl = s"https://api.telegram.org/bot${config.token}")
           val draftRepository = PendingOfferRepository.create(tx)
           val offerRepository = OfferRepository.create(tx)
-          implicit val api: Api[IO] = BotApi(client, baseUrl = s"https://api.telegram.org/bot${config.token}")
-          new LongPollHandler(
-            ref,
-            draftRepository,
-            offerRepository
-          ).start()
+          val longPollBot = new LongPollHandler(ref, draftRepository, offerRepository)
+          longPollBot.job.start >>
+            longPollBot.start()
       }
     } yield ExitCode.Success
   }

@@ -8,18 +8,22 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 import telegramium.bots.CirceImplicits.messageEncoder
 import telegramium.bots._
 import telegramium.bots.high.implicits._
+import telegramium.bots.high.keyboards.InlineKeyboardMarkups
 import telegramium.bots.high.keyboards.ReplyKeyboardMarkups._
 import telegramium.bots.high.{Api, Methods}
 import wolfcode.model.State.{Drafting, Idle, Viewing}
 import wolfcode.model.{Draft, Offer, State}
-import wolfcode.repository.{PendingOfferRepository, OfferRepository}
+import wolfcode.repository.{OfferRepository, PendingOfferRepository}
 
 import java.time.OffsetDateTime
+import scala.concurrent.duration.DurationInt
+import scala.util.Random
 
 class LongPollHandler(states: Ref[IO, Map[Long, State]],
                       pendingOfferRepository: PendingOfferRepository,
                       offerRepository: OfferRepository)(implicit api: Api[IO]) extends LongPoll[IO](api) {
   private val logger = Slf4jLogger.getLogger[IO]
+  private val admins = List(108683062L)
 
   override def onMessage(msg: Message): IO[Unit] = {
     implicit val chatId: Long = msg.chat.id
@@ -35,7 +39,8 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
               case Some(Drafting(draft)) => draft
               case _ => Draft.create(chatId, OffsetDateTime.now)
             },
-            photo = photoSizes.maxByOption(_.width).map(_.fileId)
+            photo = photoSizes.maxByOption(_.width).map(_.fileId),
+            text = msg.caption
           )
         case (Some(text), Some(Viewing(offers)), _) if text.startsWith("еще") => sendOffers(offers.toList)
         case (Some(text), None | Some(Idle | Viewing(_)), _) => searchOffers(text)
@@ -43,6 +48,68 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
       }
     } yield ()
   }
+
+  override def onCallbackQuery(query: CallbackQuery): IO[Unit] =
+    if (!admins.contains(query.from.id)) IO.unit else {
+      query.data match {
+        case Some(x) if x.startsWith("publish") => publishOffer(x.filter(_.isDigit).toInt)
+        case Some(x) if x.startsWith("decline") => declineOffer(x.filter(_.isDigit).toInt)
+        case _ => IO.unit
+      }
+    }
+
+  def job: IO[Unit] = {
+    val admin = Random.shuffle(admins).head
+    pendingOfferRepository
+      .getOldest.attempt
+      .flatMap {
+        case Right(Some(offer)) =>
+          sendOffer(offer)(admin) >>
+            Methods.sendMessage(
+              chatId = ChatIntId(admin),
+              text = "Ваше решение?",
+              replyMarkup = InlineKeyboardMarkups.singleRow(
+                List(
+                  InlineKeyboardButton(Emoji.check, callbackData = s"publish${offer.id}".some),
+                  InlineKeyboardButton(Emoji.cross, callbackData = s"decline${offer.id}".some),
+                )
+              ).some
+            ).exec.void
+        case Right(None) => IO.unit
+        case Left(th) => sendText(th.toString)(admin)
+      }
+      .attempt >> IO.sleep(1.minute) >> job
+  }
+
+  private def publishOffer(offerId: Int) =
+    pendingOfferRepository.publish(offerId).flatMap {
+      case Some(o) =>
+        sendText(
+          s"""
+             |Ваше объявление:
+             |
+             |${o.description}
+             |
+             |${Emoji.check} Опубликовано
+             |""".stripMargin
+        )(o.ownerId)
+      case None => IO.unit
+    }
+
+  private def declineOffer(offerId: Int) =
+    pendingOfferRepository.decline(offerId).flatMap {
+      case Some(o) =>
+        sendText(
+          s"""
+             |Ваше объявление:
+             |
+             |${o.description}
+             |
+             |${Emoji.cross} Отклонено
+             |""".stripMargin
+        )(o.ownerId)
+      case None => IO.unit
+    }
 
   private def sendInstructions(greet: Boolean = false)(implicit chatId: Long): IO[Unit] = {
     states.update(_.updated(chatId, State.Idle)) >>
@@ -110,7 +177,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
       chatId = ChatIntId(chatId),
       text = text,
       replyMarkup = ReplyKeyboardRemove(removeKeyboard = true).some
-    ).exec.void
+    ).exec.attempt.void
 
   private def sendOffer(offer: Offer, left: Int = 0)(implicit chatId: Long): IO[Unit] =
     Methods.sendMediaGroup(
@@ -132,6 +199,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
 
   object Emoji {
     val check = "✅"
+    val cross = "❌"
     val penciveFace = "\uD83D\uDE14"
     val smilingFace = "☺️"
   }
