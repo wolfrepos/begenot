@@ -8,6 +8,7 @@ ThisBuild / assemblyMergeStrategy := {
 lazy val root = (project in file("."))
   .settings(
     name := "begenot",
+    addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
     libraryDependencies ++= List(
       "com.dimafeng" %% "testcontainers-scala-core" % "0.40.12" % Test,
       "com.dimafeng" %% "testcontainers-scala-postgresql" % "0.40.12" % Test,

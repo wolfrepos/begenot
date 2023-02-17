@@ -10,12 +10,14 @@ import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 class OfferRepositoryTest extends AnyFunSuite with IOChecker with PostgresSetup with TestOffers {
   private lazy val offerRepository = OfferRepository.create(transactor)
 
-  test("putQuery") {
+  test("queries") {
     check(OfferRepository.putQuery(testOffers.head))
+    check(OfferRepository.ftSearchQuery(NonEmptyList.of("Процессор", "intel", "i3")))
+    check(OfferRepository.getMinMaxIdsQuery)
+    check(OfferRepository.selectEqOrGrIdQuery(0))
   }
 
   test("ftSearchQuery") {
-    check(OfferRepository.ftSearchQuery(NonEmptyList.of("Процессор", "intel", "i3")))
   }
 
   test("try ftSearch") {

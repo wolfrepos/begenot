@@ -1,18 +1,23 @@
 package wolfcode.repository
 
-import cats.data.NonEmptyList
+import cats.data.{NonEmptyList, OptionT}
 import cats.effect.IO
 import doobie._
 import doobie.implicits._
 import doobie.postgres.implicits._
 import doobie.util.transactor.Transactor
+import mouse.all.anySyntaxMouse
 import wolfcode.model.Offer
 
 import java.time.OffsetDateTime
+import scala.util.Random
 
 trait OfferRepository {
   def put(offer: Offer): IO[Unit]
+
   def ftSearch(words: NonEmptyList[String]): IO[List[Offer]]
+
+  def getRandomOffer: IO[Option[Offer]]
 }
 
 object OfferRepository {
@@ -28,7 +33,28 @@ object OfferRepository {
         ftSearchQuery(words)
           .to[List]
           .transact(tx)
+
+      override def getRandomOffer: IO[Option[Offer]] =
+        (for {
+          (minId, maxId) <- getMinMaxIdsQuery.option |> (OptionT(_))
+          randId = Random.nextInt(maxId - minId + 1) + minId
+          offer <- selectEqOrGrIdQuery(randId).option |> (OptionT(_))
+        } yield offer).value.transact(tx)
     }
+
+  def selectEqOrGrIdQuery(id: Int) =
+    sql"""
+       SELECT id, description, photo_ids, publish_time, owner_id
+       FROM offers WHERE id >= $id
+       """
+      .query[(Int, String, String, OffsetDateTime, Long)]
+      .map {
+        case (id, description, photoIds, publishTime, ownerId) =>
+          Offer(id, description, photoIds.split(sep).toList, publishTime, ownerId)
+      }
+
+  val getMinMaxIdsQuery =
+    sql"select min(id), max(id) from offers".query[(Int, Int)]
 
   def putQuery(offer: Offer): Update0 = {
     import offer._

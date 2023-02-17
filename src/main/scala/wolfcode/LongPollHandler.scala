@@ -67,6 +67,11 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
             chatId = query.message.map(_.chat.id).map(ChatIntId),
             messageId = query.message.map(_.messageId)
           ).exec.void
+      case Some("random") =>
+        offerRepository.getRandomOffer.flatMap {
+          case Some(offer) => sendOffer(offer)
+          case None => IO.unit
+        }
       case Some("help") => sendInstructions()(query.from.id)
       case Some("cancel") =>
         states.update(_.updated(chatId, State.Idle)) >>
@@ -196,7 +201,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
           sendText(
             s"${Emoji.penciveFace} по Вашему запросу не нашлось предложений",
             keyboard = InlineKeyboardMarkups.singleColumn(List(
-              InlineKeyboardButton(s"Мне повезёт ${Emoji.smilingFace}", callbackData = "help".some),
+              InlineKeyboardButton(s"Мне повезёт ${Emoji.smilingFace}", callbackData = "random".some),
               InlineKeyboardButton("Помощь", callbackData = "help".some)
             ))
           )
