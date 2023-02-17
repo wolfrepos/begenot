@@ -68,6 +68,14 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
             messageId = query.message.map(_.messageId)
           ).exec.void
       case Some("help") => sendInstructions()(query.from.id)
+      case Some("cancel") =>
+        states.update(_.updated(chatId, State.Idle)) >>
+          Methods.editMessageText(
+            text = "Передумал(а)",
+            chatId = query.message.map(_.chat.id).map(ChatIntId),
+            messageId = query.message.map(_.messageId),
+            replyMarkup = None
+          ).exec.void
       case Some("next") =>
         states.get.map(_.getOrElse(chatId, State.Idle)).flatMap {
           case Viewing(offers) => sendOffers(offers.toList)
@@ -235,7 +243,10 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
                |
                |Теперь опишите Ваш товар или услугу
                |Укажите стоимость и другие важные детали чтобы на него откликнулось больше людей
-               |""".stripMargin
+               |""".stripMargin,
+            keyboard = InlineKeyboardMarkups.singleButton(
+              InlineKeyboardButton(s"Передумал(а)", callbackData = "cancel".some),
+            )
           ).whenA(newDraft.description.isEmpty && newDraft.photoIds.length == 1)
     }
   }
