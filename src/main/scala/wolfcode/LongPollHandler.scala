@@ -156,26 +156,29 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
       case None => IO.unit
     }
 
-  private def sendInstructions(greet: Boolean = false)(implicit chatId: Long): IO[Unit] = {
+  private def sendInstructions(greet: Boolean = false)(implicit chatId: Long): IO[Unit] =
     states.update(_.updated(chatId, State.Idle)) >>
+      Methods.sendVideo(
+        chatId = ChatIntId(chatId),
+        video = InputLinkFile(videoId)
+      ).exec.attempt.void >>
       sendText(
         s"""
            |Привет!
            |Меня зовут Бегенот!
            |Я помогу тебе продать/купить вещи
-           |
-           |Просто напиши что тебе нужно и я поищу предложения
-           |Или просто отправь фото вещи, которую ты хочешь продать
-           |
-           |Смотри как просто это сделать ${Emoji.smilingFace}
            |""".stripMargin
 
       ).whenA(greet) >>
-      Methods.sendVideo(
-        chatId = ChatIntId(chatId),
-        video = InputLinkFile(videoId)
-      ).exec.attempt.void
-  }
+      sendText(
+        s"""
+           |Просто напиши что тебе нужно и я поищу предложения
+           |Если хочешь продать что-то свое - просто отправь фото
+           |
+           |Смотри как просто это сделать на видео выше ${Emoji.smilingFace}
+           |""".stripMargin
+
+      )
 
   private def searchOffers(text: String)(implicit chatId: Long): IO[Unit] =
     NonEmptyList.fromList {
@@ -201,7 +204,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
           sendText(
             s"${Emoji.penciveFace} по Вашему запросу не нашлось предложений",
             keyboard = InlineKeyboardMarkups.singleColumn(List(
-              InlineKeyboardButton(s"Мне повезёт ${Emoji.smilingFace}", callbackData = "random".some),
+              InlineKeyboardButton(s"Случайное предложение ${Emoji.dice}", callbackData = "random".some),
               InlineKeyboardButton("Помощь", callbackData = "help".some)
             ))
           )
@@ -284,6 +287,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
   object Emoji {
     val check = "✅"
     val cross = "❌"
+    val dice = "\uD83C\uDFB2"
     val downArrow = "⬇️"
     val penciveFace = "\uD83D\uDE14"
     val smilingFace = "☺️"

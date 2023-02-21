@@ -42,10 +42,10 @@ object OfferRepository {
         } yield offer).value.transact(tx)
     }
 
-  def selectEqOrGrIdQuery(id: Int) =
+  def selectEqOrGrIdQuery(id: Int): Query0[Offer] =
     sql"""
        SELECT id, description, photo_ids, publish_time, owner_id
-       FROM offers WHERE id >= $id
+       FROM offers WHERE id >= $id LIMIT 1
        """
       .query[(Int, String, String, OffsetDateTime, Long)]
       .map {
@@ -53,7 +53,7 @@ object OfferRepository {
           Offer(id, description, photoIds.split(sep).toList, publishTime, ownerId)
       }
 
-  val getMinMaxIdsQuery =
+  val getMinMaxIdsQuery: doobie.Query0[(Int, Int)] =
     sql"select min(id), max(id) from offers".query[(Int, Int)]
 
   def putQuery(offer: Offer): Update0 = {
