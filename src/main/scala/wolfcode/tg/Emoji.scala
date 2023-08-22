@@ -1,4 +1,4 @@
-package wolfcode.`val`
+package wolfcode.tg
 
 object Emoji {
   val check = "✅"

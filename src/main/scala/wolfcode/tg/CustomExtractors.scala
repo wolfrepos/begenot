@@ -1,4 +1,4 @@
-package wolfcode
+package wolfcode.tg
 
 import telegramium.bots.{Contact, Message, WebAppData}
 

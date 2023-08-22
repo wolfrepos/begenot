@@ -1,4 +1,4 @@
-package wolfcode.repository
+package wolfcode.repo
 
 import cats.effect.IO
 import doobie._
@@ -7,14 +7,14 @@ import doobie.postgres.implicits._
 import doobie.util.transactor.Transactor
 import wolfcode.model.User
 
-trait UserRepository {
+trait UserRepo {
   def upsert(user: User): IO[Unit]
   def get(id: Long): IO[Option[User]]
 }
 
-object UserRepository {
-  def create(tx: Transactor[IO]): UserRepository =
-    new UserRepository {
+object UserRepo {
+  def create(tx: Transactor[IO]): UserRepo =
+    new UserRepo {
       override def upsert(user: User): IO[Unit] =
         upsertQuery(user).run.transact(tx).void
 

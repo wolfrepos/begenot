@@ -1,4 +1,4 @@
-package wolfcode.repository
+package wolfcode.repo
 
 import cats.data.OptionT
 import cats.effect.IO
@@ -9,7 +9,7 @@ import doobie.util.transactor.Transactor
 import mouse.all.anySyntaxMouse
 import wolfcode.model.Offer
 
-trait PendingOfferRepository {
+trait PendingOfferRepo {
   def put(offer: Offer): IO[Unit]
   def get(id: Int): IO[Option[Offer]]
   def getOldestForPublish: IO[Option[Offer]]
@@ -18,9 +18,9 @@ trait PendingOfferRepository {
   def decline(id: Int): IO[Option[Offer]]
 }
 
-object PendingOfferRepository {
-  def create(tx: Transactor[IO]): PendingOfferRepository =
-    new PendingOfferRepository {
+object PendingOfferRepo {
+  def create(tx: Transactor[IO]): PendingOfferRepo =
+    new PendingOfferRepo {
       override def put(offer: Offer): IO[Unit] =
         putQuery(offer).run.transact(tx).void
 
@@ -35,16 +35,16 @@ object PendingOfferRepository {
 
       override def publish(id: Int): IO[Option[Offer]] = {
         for {
-          offer <- PendingOfferRepository.getQuery(id).option |> (OptionT(_))
+          offer <- PendingOfferRepo.getQuery(id).option |> (OptionT(_))
           _ <- OfferRepo.SQL.put(offer).run |> (OptionT.liftF(_))
-          _ <- PendingOfferRepository.deleteQuery(id).run |> (OptionT.liftF(_))
+          _ <- PendingOfferRepo.deleteQuery(id).run |> (OptionT.liftF(_))
         } yield offer
       }.value.transact(tx)
 
       override def decline(id: Int): IO[Option[Offer]] = {
         for {
-          offer <- PendingOfferRepository.getQuery(id).option |> (OptionT(_))
-          _ <- PendingOfferRepository.deleteQuery(id).run |> (OptionT.liftF(_))
+          offer <- PendingOfferRepo.getQuery(id).option |> (OptionT(_))
+          _ <- PendingOfferRepo.deleteQuery(id).run |> (OptionT.liftF(_))
         } yield offer
       }.value.transact(tx)
     }

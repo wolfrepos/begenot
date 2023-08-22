@@ -1,4 +1,4 @@
-package wolfcode
+package wolfcode.tg
 
 import cats.effect.{Async, Ref}
 import cats.syntax.all._

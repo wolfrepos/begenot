@@ -1,4 +1,4 @@
-package wolfcode.repository
+package wolfcode.repo
 
 import cats.effect.IO
 import doobie._

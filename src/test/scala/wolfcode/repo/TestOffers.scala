@@ -1,4 +1,4 @@
-package wolfcode.repository
+package wolfcode.repo
 
 import cats.data.NonEmptyList
 import cats.effect.IO

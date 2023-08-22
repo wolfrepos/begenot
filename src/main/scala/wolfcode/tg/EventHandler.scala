@@ -1,4 +1,4 @@
-package wolfcode
+package wolfcode.tg
 
 import cats.data.NonEmptyList
 import cats.effect._
@@ -12,20 +12,20 @@ import telegramium.bots._
 import telegramium.bots.high.implicits._
 import telegramium.bots.high.keyboards.{InlineKeyboardMarkups, ReplyKeyboardMarkups}
 import telegramium.bots.high.{Api, Methods}
-import wolfcode.CustomExtractors._
-import wolfcode.`val`.Emoji
 import wolfcode.model.State.{Drafting, Idle, Viewing}
 import wolfcode.model.{Draft, Offer, State, User => User0}
-import wolfcode.repository.{OfferRepo, PendingOfferRepository, UserRepository}
+import wolfcode.repo.{OfferRepo, PendingOfferRepo, UserRepo}
+import wolfcode.tg.CustomExtractors._
+import wolfcode.tg.Emoji
 
 import java.time.OffsetDateTime
 import scala.concurrent.duration.DurationInt
 import scala.util.Random
 
-class LongPollHandler(states: Ref[IO, Map[Long, State]],
-                      userRepository: UserRepository,
-                      offerRepo: OfferRepo,
-                      pendingOfferRepository: PendingOfferRepository)(implicit api: Api[IO]) extends LongPoll[IO](api) {
+class EventHandler(states: Ref[IO, Map[Long, State]],
+                   userRepo: UserRepo,
+                   offerRepo: OfferRepo,
+                   pendingOfferRepo: PendingOfferRepo)(implicit api: Api[IO]) extends LongPoll[IO](api) {
   private val logger = Slf4jLogger.getLogger[IO]
   private val admins = List(108683062L)
 
@@ -35,7 +35,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
       _ <- logger.info(s"got message: ${message.asJson}")
       state <- states.get.map(_.getOrElse(message.chat.id, State.Idle))
       _ <- (state, message) match {
-        case (_, Contactt(c)) => userRepository.upsert(User0(chatId, c.phoneNumber, c.firstName))
+        case (_, Contactt(c)) => userRepo.upsert(User0(chatId, c.phoneNumber, c.firstName))
         case (_, Text("/start")) => sendInstructions
         case (_, WebApp(WebAppData(data, buttonText))) if buttonText == searchButton.text =>
           parser.parse(data).flatMap(_.as[OfferRepo.Query]) match {
@@ -93,7 +93,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
         }
       case Some(x) if x.startsWith("contact") =>
         val userId = x.filter(_.isDigit).toInt
-        userRepository.get(userId).flatMap {
+        userRepo.get(userId).flatMap {
           case Some(user) =>
             Methods.sendContact(
               chatId = ChatIntId(chatId),
@@ -110,7 +110,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
 
   def job: IO[Unit] = {
     val admin = Random.shuffle(admins).head
-    pendingOfferRepository
+    pendingOfferRepo
       .getOldestForPublish.attempt
       .flatMap {
         case Right(Some(offer)) =>
@@ -132,7 +132,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
   }
 
   private def publishOffer(offerId: Int) =
-    pendingOfferRepository.publish(offerId).flatMap {
+    pendingOfferRepo.publish(offerId).flatMap {
       case Some(o) =>
         sendText(
           s"""
@@ -150,7 +150,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
     }
 
   private def declineOffer(offerId: Int) =
-    pendingOfferRepository.decline(offerId).flatMap {
+    pendingOfferRepo.decline(offerId).flatMap {
       case Some(o) =>
         sendText(
           s"""
@@ -208,8 +208,8 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
     newDraft.toOffer match {
       case Some(offer) =>
         states.update(_.updated(chatId, Idle)) >>
-          pendingOfferRepository.put(offer) >>
-          userRepository.get(chatId).flatMap {
+          pendingOfferRepo.put(offer) >>
+          userRepo.get(chatId).flatMap {
             case Some(_) =>
               sendText(s"${Emoji.check} Ваше объявление будет опубликовано после проверки")
             case _ =>
