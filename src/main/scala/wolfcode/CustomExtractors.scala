@@ -1,6 +1,6 @@
 package wolfcode
 
-import telegramium.bots.{Contact, Message}
+import telegramium.bots.{Contact, Message, WebAppData}
 
 object CustomExtractors {
 
@@ -17,5 +17,10 @@ object CustomExtractors {
   object Contactt {
     def unapply(message: Message): Option[Contact] =
       message.contact
+  }
+
+  object WebApp {
+    def unapply(message: Message): Option[WebAppData] =
+      message.webAppData
   }
 }
