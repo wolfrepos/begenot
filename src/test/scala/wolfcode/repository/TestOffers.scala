@@ -5,7 +5,7 @@ import cats.effect.IO
 import doobie._
 import doobie.implicits._
 import doobie.postgres.implicits._
-import wolfcode.model.Offer
+import wolfcode.model.{Offer, PhotoIds}
 
 import java.time.OffsetDateTime
 
@@ -13,24 +13,15 @@ trait TestOffers {
   this: PostgresSetup =>
 
   def loadTestOffers: IO[Unit] =
-    Update[(Int, String, String, OffsetDateTime, Long)](
+    Update[Offer](
       """
-      INSERT INTO offers (id, description, photo_ids, publish_time, owner_id)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO offers (id, owner_id, description, photo_ids, publish_time, brand, model, yearr, price)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
-    ).updateMany(testOffers.map {
-      case Offer(id, description, photoIds, publishTime, ownerId) =>
-        (id, description, photoIds.mkString(OfferRepository.sep), publishTime, ownerId)
-    }).transact(transactor).void
+    ).updateMany(testOffers).transact(transactor).void
 
   val testOffers: NonEmptyList[Offer] =
     NonEmptyList.of(
-      1 -> "Продаю процессор intel core i3 12100",
-      2 -> "Продам процессор intel core i5 12600",
-      3 -> "Продам процессор amd ryzen 5 2600x",
-      4 -> "Продам процессор amd ryzen 3 2200g"
-    ).map((offer _).tupled)
-
-  private def offer(id: Int, description: String): Offer =
-    Offer(id, description, List(""), OffsetDateTime.now(), 0)
+      Offer(0, 1L, "", PhotoIds("" :: Nil), OffsetDateTime.now(), "kia", "k5", 2019, 15200)
+    )
 }

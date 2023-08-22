@@ -3,8 +3,9 @@ package wolfcode
 import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits.{catsSyntaxApplicativeByName, catsSyntaxOptionId}
-import io.circe.Json
+import io.circe.{Json, parser}
 import io.circe.syntax.EncoderOps
+import io.circe.generic.auto._
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import telegramium.bots.CirceImplicits.messageEncoder
 import telegramium.bots._
@@ -42,18 +43,24 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
               case Drafting(draft) => draft
               case _ => Draft.create(chatId, OffsetDateTime.now)
             },
-            photoId = photoId.some,
-            text = message.caption
+            photoId = photoId.some
           )
         case (Drafting(_), Text(text)) if text.toLowerCase.contains("отмена") => sendInstructions
         case (_, WebApp(WebAppData(data, buttonText))) if buttonText == searchButton.text =>
-          logger.info(s"Got data from webApp: ${Json.fromString(data)}")
+          logger.info(s"Got data from webApp: ${parser.parse(data)}")
         case (Drafting(draft), WebApp(WebAppData(data, buttonText))) if buttonText == createButton.text =>
-          logger.info(s"Got data from webApp: ${Json.fromString(data)}")
+          parser.parse(data).flatMap(_.as[FormData]) match {
+            case Left(_) => sendInstructions
+            case Right(formData) =>
+              logger.info(s"Got data from webApp: $formData") >>
+                updateDraft(draft, formData = formData.some)
+          }
         case _ => sendInstructions
       }
     } yield ()
   }
+
+  case class FormData(brand: String, model: String, year: Int, price: Int, text: String)
 
   override def onCallbackQuery(query: CallbackQuery): IO[Unit] = {
     implicit val chatId: Long = query.from.id
@@ -124,7 +131,10 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
           s"""
              |Ваше объявление:
              |
-             |${o.description}
+             |${Emoji.car} ${o.brand} ${o.model}
+             |Год: ${o.year}
+             |Цена: ${o.price}
+             |Описание: ${o.description}
              |
              |${Emoji.check} Опубликовано
              |""".stripMargin
@@ -139,7 +149,10 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
           s"""
              |Ваше объявление:
              |
-             |${o.description}
+             |${Emoji.car} ${o.brand} ${o.model}
+             |Год: ${o.year}
+             |Цена: ${o.price}
+             |Описание: ${o.description}
              |
              |${Emoji.cross} Отклонено
              |""".stripMargin
@@ -158,18 +171,14 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
            |${Emoji.car} Если Вы ищете машину - нажмите на кнопку поиска
            |
            |${Emoji.car} Если хотите продать машину - отправьте фотографии машины
-           |""".stripMargin,
-        keyboard = ReplyKeyboardMarkups.singleButton(searchButton, resizeKeyboard = true.some)
+           |""".stripMargin
       )
 
   private def sendOffers(offers: List[Offer])(implicit chatId: Long): IO[Unit] =
     offers match {
       case Nil =>
         states.update(_.updated(chatId, Idle)) >>
-          sendText(
-            s"${Emoji.penciveFace} по Вашему запросу не нашлось предложений",
-            keyboard = InlineKeyboardMarkups.singleButton(InlineKeyboardButton("Уведомить", callbackData = "help".some))
-          )
+          sendText(s"${Emoji.penciveFace} по Вашему запросу не нашлось предложений, попробуйте другие критерии поиска")
       case offer :: Nil =>
         states.update(_.updated(chatId, Idle)) >>
           sendOffer(offer)
@@ -179,10 +188,14 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
     }
 
   private def updateDraft(draft: Draft,
-                          text: Option[String] = None,
-                          photoId: Option[String] = None)(implicit chatId: Long): IO[Unit] = {
+                          photoId: Option[String] = None,
+                          formData: Option[FormData] = None)(implicit chatId: Long): IO[Unit] = {
     val newDraft = draft.copy(
-      description = text.orElse(draft.description),
+      description = formData.map(_.text).orElse(draft.description),
+      brand = formData.map(_.brand).orElse(draft.brand),
+      model = formData.map(_.model).orElse(draft.model),
+      year = formData.map(_.year).orElse(draft.year),
+      price = formData.map(_.price).orElse(draft.price),
       photoIds = photoId.fold(draft.photoIds)(_ :: draft.photoIds)
     )
     newDraft.toOffer match {
@@ -220,7 +233,8 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
     }
   }
 
-  private def sendText(text: String, keyboard: KeyboardMarkup = ReplyKeyboardRemove(removeKeyboard = true))(implicit chatId: Long): IO[Unit] =
+  private def sendText(text: String,
+                       keyboard: KeyboardMarkup = ReplyKeyboardMarkups.singleButton(searchButton, resizeKeyboard = true.some))(implicit chatId: Long): IO[Unit] =
     Methods.sendMessage(
       chatId = ChatIntId(chatId),
       text = text,
@@ -230,11 +244,17 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
   private def sendOffer(offer: Offer, left: Int = 0)(implicit chatId: Long): IO[Unit] =
     Methods.sendMediaGroup(
       chatId = ChatIntId(chatId),
-      media = offer.photoIds.map(InputMediaPhoto(_))
+      media = offer.photoIds.ids.map(InputMediaPhoto(_))
     ).exec.attempt.void >>
       Methods.sendMessage(
         chatId = ChatIntId(chatId),
-        text = offer.description,
+        text =
+          s"""
+             |${Emoji.car} ${offer.brand} ${offer.model}
+             |Год: ${offer.year}
+             |Цена: ${offer.price}
+             |Описание: ${offer.description}
+             |""".stripMargin,
         replyMarkup =
           if (left == 0)
             None

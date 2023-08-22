@@ -9,8 +9,6 @@ import doobie.util.transactor.Transactor
 import mouse.all.anySyntaxMouse
 import wolfcode.model.Offer
 
-import java.time.OffsetDateTime
-
 trait PendingOfferRepository {
   def put(offer: Offer): IO[Unit]
   def get(id: Int): IO[Option[Offer]]
@@ -54,37 +52,25 @@ object PendingOfferRepository {
   def putQuery(offer: Offer): Update0 = {
     import offer._
     sql"""
-       INSERT INTO pending_offers (description, photo_ids, publish_time, owner_id)
-       VALUES ($description, ${photoIds.mkString(sep)}, $publishTime, $ownerId)
+       INSERT INTO pending_offers (description, photo_ids, publish_time, owner_id, brand, model, yearr, price)
+       VALUES ($description, $photoIds, $publishTime, $ownerId, $brand, $model, $year, $price)
        """.update
   }
 
   def getQuery(id: Int): Query0[Offer] =
     sql"""
-     SELECT id, description, photo_ids, publish_time, owner_id
-     FROM pending_offers WHERE id = $id
-     """
-      .query[(Int, String, String, OffsetDateTime, Long)]
-      .map {
-        case (id, description, photoIds, createTime, ownerId) =>
-          Offer(id, description, photoIds.split(sep).toList, createTime, ownerId)
-      }
+       SELECT id, owner_id, description, photo_ids, publish_time, brand, model, yearr, price
+       FROM pending_offers WHERE id = $id
+       """.query[Offer]
 
   val getOldestForPublishQuery: Query0[Offer] =
     sql"""
-       SELECT t1.id, t1.description, t1.photo_ids, t1.publish_time, t1.owner_id
+       SELECT t1.id, t1.owner_id, t1.description, t1.photo_ids, t1.publish_time, t1.brand, t1.model, t1.yearr, t1.price
        FROM pending_offers t1
        INNER JOIN users t2 ON t1.owner_id = t2.id
        ORDER BY publish_time ASC LIMIT 1
-       """
-      .query[(Int, String, String, OffsetDateTime, Long)]
-      .map {
-        case (id, description, photoIds, createTime, ownerId) =>
-          Offer(id, description, photoIds.split(sep).toList, createTime, ownerId)
-      }
+       """.query[Offer]
 
   def deleteQuery(id: Int): Update0 =
     sql"DELETE FROM pending_offers where id = $id".update
-
-  val sep = "&"
 }

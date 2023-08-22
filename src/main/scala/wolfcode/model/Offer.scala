@@ -3,7 +3,11 @@ package wolfcode.model
 import java.time.OffsetDateTime
 
 case class Offer(id: Int,
+                 ownerId: Long,
                  description: String,
-                 photoIds: List[String],
+                 photoIds: PhotoIds,
                  publishTime: OffsetDateTime,
-                 ownerId: Long)
+                 brand: String,
+                 model: String,
+                 year: Int,
+                 price: Int)

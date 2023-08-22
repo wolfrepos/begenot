@@ -21,7 +21,8 @@ lazy val root = (project in file("."))
       "org.tpolecat" %% "doobie-hikari" % "1.0.0-RC2",
       "org.tpolecat" %% "doobie-postgres" % "1.0.0-RC2",
       "org.tpolecat" %% "doobie-scalatest" % "1.0.0-RC2" % Test,
-      "org.typelevel" %% "mouse" % "1.2.1"
+      "org.typelevel" %% "mouse" % "1.2.1",
+      "io.circe" %% "circe-generic" % "0.14.3",
     ),
     assembly / assemblyJarName := "app.jar"
   )
