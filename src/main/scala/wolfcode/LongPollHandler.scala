@@ -259,7 +259,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
           s"""
              |${Emoji.car} ${offer.brand.capitalize} ${offer.model.capitalize}
              |Год: ${offer.year}
-             |Цена: ${offer.price} $
+             |Цена: ${offer.price} $$
              |Описание: ${offer.description}
              |""".stripMargin,
         replyMarkup =
