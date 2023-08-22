@@ -3,9 +3,9 @@ package wolfcode
 import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits.{catsSyntaxApplicativeByName, catsSyntaxOptionId}
-import io.circe.{Json, parser}
-import io.circe.syntax.EncoderOps
 import io.circe.generic.auto._
+import io.circe.parser
+import io.circe.syntax.EncoderOps
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import telegramium.bots.CirceImplicits.messageEncoder
 import telegramium.bots._
@@ -16,7 +16,7 @@ import wolfcode.CustomExtractors._
 import wolfcode.`val`.Emoji
 import wolfcode.model.State.{Drafting, Idle, Viewing}
 import wolfcode.model.{Draft, Offer, State, User => User0}
-import wolfcode.repository.{OfferRepository, PendingOfferRepository, UserRepository}
+import wolfcode.repository.{OfferRepo, PendingOfferRepository, UserRepository}
 
 import java.time.OffsetDateTime
 import scala.concurrent.duration.DurationInt
@@ -24,7 +24,7 @@ import scala.util.Random
 
 class LongPollHandler(states: Ref[IO, Map[Long, State]],
                       userRepository: UserRepository,
-                      offerRepository: OfferRepository,
+                      offerRepo: OfferRepo,
                       pendingOfferRepository: PendingOfferRepository)(implicit api: Api[IO]) extends LongPoll[IO](api) {
   private val logger = Slf4jLogger.getLogger[IO]
   private val admins = List(108683062L)
@@ -37,6 +37,13 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
       _ <- (state, message) match {
         case (_, Contactt(c)) => userRepository.upsert(User0(chatId, c.phoneNumber, c.firstName))
         case (_, Text("/start")) => sendInstructions
+        case (_, WebApp(WebAppData(data, buttonText))) if buttonText == searchButton.text =>
+          parser.parse(data).flatMap(_.as[OfferRepo.Query]) match {
+            case Left(error) => logger.info(s"Error parsing json: $error") >> sendInstructions
+            case Right(q) =>
+              logger.info(s"Got data from webApp: $q") >>
+                offerRepo.query(q).flatMap(sendOffers)
+          }
         case (state, PhotoId(photoId)) =>
           updateDraft(
             draft = state match {
@@ -46,11 +53,11 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
             photoId = photoId.some
           )
         case (Drafting(_), Text(text)) if text.toLowerCase.contains("отмена") => sendInstructions
-        case (_, WebApp(WebAppData(data, buttonText))) if buttonText == searchButton.text =>
-          logger.info(s"Got data from webApp: ${parser.parse(data)}")
         case (Drafting(draft), WebApp(WebAppData(data, buttonText))) if buttonText == createButton.text =>
           parser.parse(data).flatMap(_.as[FormData]) match {
-            case Left(_) => sendInstructions
+            case Left(error) =>
+              logger.info(s"Error parsing json: $error") >>
+                sendInstructions
             case Right(formData) =>
               logger.info(s"Got data from webApp: $formData") >>
                 updateDraft(draft, formData = formData.some)
@@ -234,7 +241,7 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
   }
 
   private def sendText(text: String,
-                       keyboard: KeyboardMarkup = ReplyKeyboardMarkups.singleButton(searchButton, resizeKeyboard = true.some))(implicit chatId: Long): IO[Unit] =
+                       keyboard: KeyboardMarkup = defaultKeyboard)(implicit chatId: Long): IO[Unit] =
     Methods.sendMessage(
       chatId = ChatIntId(chatId),
       text = text,
@@ -250,23 +257,23 @@ class LongPollHandler(states: Ref[IO, Map[Long, State]],
         chatId = ChatIntId(chatId),
         text =
           s"""
-             |${Emoji.car} ${offer.brand} ${offer.model}
+             |${Emoji.car} ${offer.brand.capitalize} ${offer.model.capitalize}
              |Год: ${offer.year}
-             |Цена: ${offer.price}
+             |Цена: ${offer.price} $
              |Описание: ${offer.description}
              |""".stripMargin,
         replyMarkup =
-          if (left == 0)
-            None
-          else
-            InlineKeyboardMarkups.singleRow(
-              InlineKeyboardButton(s"${Emoji.car} $left", callbackData = "next".some) :: Nil
-            ).some
+          InlineKeyboardMarkups.singleRow(
+            InlineKeyboardButton(s"Контакты продавца", callbackData = s"contact${offer.ownerId}".some) :: {
+              if (left > 0) InlineKeyboardButton(s"${Emoji.car} $left", callbackData = "next".some) :: Nil else Nil
+            }
+          ).some
       ).exec.void
 
   private val searchWebApp = WebAppInfo("https://wolfrepos.github.io/avtokg/search")
   private val createWebApp = WebAppInfo("https://wolfrepos.github.io/avtokg/create")
   private val createButton = KeyboardButton(s"Заполнить форму", webApp = createWebApp.some)
   private val searchButton = KeyboardButton(s"Поиск", webApp = searchWebApp.some)
+  private val defaultKeyboard = ReplyKeyboardMarkups.singleButton(searchButton, resizeKeyboard = true.some)
   private val videoId = "BAACAgIAAxkBAAICImPuZ1R07Fv3Otv0av8naAOtX2A9AAKnJAACW1N4S7zjcGCYQfVrLgQ"
 }

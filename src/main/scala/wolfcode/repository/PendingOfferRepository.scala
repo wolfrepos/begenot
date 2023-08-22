@@ -36,7 +36,7 @@ object PendingOfferRepository {
       override def publish(id: Int): IO[Option[Offer]] = {
         for {
           offer <- PendingOfferRepository.getQuery(id).option |> (OptionT(_))
-          _ <- OfferRepository.putQuery(offer).run |> (OptionT.liftF(_))
+          _ <- OfferRepo.SQL.put(offer).run |> (OptionT.liftF(_))
           _ <- PendingOfferRepository.deleteQuery(id).run |> (OptionT.liftF(_))
         } yield offer
       }.value.transact(tx)
