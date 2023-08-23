@@ -111,7 +111,7 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
   def job: IO[Unit] = {
     val admin = Random.shuffle(admins).head
     pendingOfferRepo
-      .getOldestForPublish.attempt
+      .getToPublish.attempt
       .flatMap {
         case Right(Some(offer)) =>
           sendOffer(offer)(admin) >>
@@ -263,11 +263,12 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
              |Описание: ${offer.description}
              |""".stripMargin,
         replyMarkup =
-          InlineKeyboardMarkups.singleRow(
-            InlineKeyboardButton(s"Контакты продавца", callbackData = s"contact${offer.ownerId}".some) :: {
-              if (left > 0) InlineKeyboardButton(s"${Emoji.car} $left", callbackData = "next".some) :: Nil else Nil
-            }
-          ).some
+          if (left == 0)
+            defaultKeyboard.some
+          else
+            InlineKeyboardMarkups.singleRow(
+              InlineKeyboardButton(s"${Emoji.car} $left", callbackData = "next".some) :: Nil
+            ).some
       ).exec.void
 
   private val searchWebApp = WebAppInfo("https://wolfrepos.github.io/avtokg/search")

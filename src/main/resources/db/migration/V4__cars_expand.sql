@@ -1,0 +1,14 @@
+
+ALTER TABLE offers
+ADD COLUMN transmission VARCHAR NOT NULL DEFAULT 'unknown',
+ADD COLUMN steering     VARCHAR NOT NULL DEFAULT 'unknown',
+ADD COLUMN mileage      INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN phone        VARCHAR NOT NULL DEFAULT 'unknown',
+ADD COLUMN city         VARCHAR NOT NULL DEFAULT 'unknown';
+
+ALTER TABLE pending_offers
+ADD COLUMN transmission VARCHAR NOT NULL DEFAULT 'unknown',
+ADD COLUMN steering     VARCHAR NOT NULL DEFAULT 'unknown',
+ADD COLUMN mileage      INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN phone        VARCHAR NOT NULL DEFAULT 'unknown',
+ADD COLUMN city         VARCHAR NOT NULL DEFAULT 'unknown';

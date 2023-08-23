@@ -9,9 +9,9 @@ import java.time.OffsetDateTime
 
 class PendingOfferRepoTest extends AnyFunSuite with IOChecker with PostgresSetup {
   test("queries") {
-    check(PendingOfferRepo.putQuery(Offer(0, 1L, "", PhotoIds("" :: Nil), OffsetDateTime.now(), "kia", "k5", 2019, 15200)))
-    check(PendingOfferRepo.getQuery(0))
-    check(PendingOfferRepo.getOldestForPublishQuery)
-    check(PendingOfferRepo.deleteQuery(0))
+    check(sql.putPendingOffer(Offer(0, 1L, "", PhotoIds("" :: Nil), OffsetDateTime.now(), "kia", "k5", 2019, 15200)))
+    check(sql.getPendingOffer(0))
+    check(sql.getPendingOfferToPublish)
+    check(sql.deletePendingOffer(0))
   }
 }
