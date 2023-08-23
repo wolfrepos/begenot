@@ -54,20 +54,18 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
           )
         case (Drafting(_), Text(text)) if text.toLowerCase.contains("отмена") => sendInstructions
         case (Drafting(draft), WebApp(WebAppData(data, buttonText))) if buttonText == createButton.text =>
-          parser.parse(data).flatMap(_.as[FormData]) match {
+          parser.parse(data).flatMap(_.as[Offer.Car]) match {
             case Left(error) =>
               logger.info(s"Error parsing json: $error") >>
                 sendInstructions
-            case Right(formData) =>
-              logger.info(s"Got data from webApp: $formData") >>
-                updateDraft(draft, formData = formData.some)
+            case Right(car) =>
+              logger.info(s"Got data from webApp: $car") >>
+                updateDraft(draft, car = car.some)
           }
         case _ => sendInstructions
       }
     } yield ()
   }
-
-  case class FormData(brand: String, model: String, year: Int, price: Int, text: String)
 
   override def onCallbackQuery(query: CallbackQuery): IO[Unit] = {
     implicit val chatId: Long = query.from.id
@@ -137,12 +135,7 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
         sendText(
           s"""
              |Ваше объявление:
-             |
-             |${Emoji.car} ${o.brand} ${o.model}
-             |Год: ${o.year}
-             |Цена: ${o.price}
-             |Описание: ${o.description}
-             |
+             |${o.car.show}
              |${Emoji.check} Опубликовано
              |""".stripMargin
         )(o.ownerId)
@@ -155,12 +148,7 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
         sendText(
           s"""
              |Ваше объявление:
-             |
-             |${Emoji.car} ${o.brand} ${o.model}
-             |Год: ${o.year}
-             |Цена: ${o.price}
-             |Описание: ${o.description}
-             |
+             |${o.car.show}
              |${Emoji.cross} Отклонено
              |""".stripMargin
         )(o.ownerId)
@@ -196,35 +184,16 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
 
   private def updateDraft(draft: Draft,
                           photoId: Option[String] = None,
-                          formData: Option[FormData] = None)(implicit chatId: Long): IO[Unit] = {
+                          car: Option[Offer.Car] = None)(implicit chatId: Long): IO[Unit] = {
     val newDraft = draft.copy(
-      description = formData.map(_.text).orElse(draft.description),
-      brand = formData.map(_.brand).orElse(draft.brand),
-      model = formData.map(_.model).orElse(draft.model),
-      year = formData.map(_.year).orElse(draft.year),
-      price = formData.map(_.price).orElse(draft.price),
+      car = car.orElse(draft.car),
       photoIds = photoId.fold(draft.photoIds)(_ :: draft.photoIds)
     )
     newDraft.toOffer match {
       case Some(offer) =>
         states.update(_.updated(chatId, Idle)) >>
           pendingOfferRepo.put(offer) >>
-          userRepo.get(chatId).flatMap {
-            case Some(_) =>
-              sendText(s"${Emoji.check} Ваше объявление будет опубликовано после проверки")
-            case _ =>
-              sendText(
-                s"""
-                   |${Emoji.check} Ваше объявление будет опубликовано после проверки
-                   |
-                   |Чтобы покупатели могли с Вами связаться, поделитесь Вашим контактом нажав кнопку ниже
-                   |""".stripMargin,
-                ReplyKeyboardMarkups.singleButton(
-                  KeyboardButton("Поделиться своим контактом", requestContact = true.some),
-                  resizeKeyboard = true.some
-                )
-              )
-          }
+          sendText(s"${Emoji.check} Ваше объявление будет опубликовано после проверки")
       case None =>
         states.update(_.updated(chatId, Drafting(newDraft))) >>
           sendText(
@@ -236,7 +205,7 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
             keyboard = ReplyKeyboardMarkups.singleColumn(List(
               createButton, KeyboardButton(s"${Emoji.cross} Отмена")
             ), resizeKeyboard = true.some)
-          ).whenA(newDraft.description.isEmpty && newDraft.photoIds.length == 1)
+          ).whenA(newDraft.car.isEmpty && newDraft.photoIds.length == 1)
     }
   }
 
@@ -255,13 +224,7 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
     ).exec.attempt.void >>
       Methods.sendMessage(
         chatId = ChatIntId(chatId),
-        text =
-          s"""
-             |${Emoji.car} ${offer.brand.capitalize} ${offer.model.capitalize}
-             |Год: ${offer.year}
-             |Цена: ${offer.price} $$
-             |Описание: ${offer.description}
-             |""".stripMargin,
+        text = offer.car.show,
         replyMarkup =
           if (left == 0)
             defaultKeyboard.some

@@ -12,16 +12,24 @@ import java.time.OffsetDateTime
 trait TestOffers {
   this: PostgresSetup =>
 
-  def loadTestOffers: IO[Unit] =
-    Update[Offer](
-      """
-      INSERT INTO offers (id, owner_id, description, photo_ids, publish_time, brand, model, yearr, price)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      """
-    ).updateMany(testOffers).transact(transactor).void
+  val car = Offer.Car(
+    description = "",
+    brand = "kia",
+    model = "k5",
+    year = 2019,
+    price = 17000,
+    transmission = "automatic",
+    steering = "left",
+    mileage = 170000,
+    phone = "123123",
+    city = "bishkek"
+  )
+  val offer = Offer(
+    id = 0,
+    ownerId = 1L,
+    photoIds = PhotoIds("" :: Nil), publishTime = OffsetDateTime.now(), car = car
+  )
 
   val testOffers: NonEmptyList[Offer] =
-    NonEmptyList.of(
-      Offer(0, 1L, "", PhotoIds("" :: Nil), OffsetDateTime.now(), "kia", "k5", 2019, 15200)
-    )
+    NonEmptyList.of(offer)
 }

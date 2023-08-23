@@ -1,32 +1,25 @@
 package wolfcode.model
 
 import cats.data.NonEmptyList
-import cats.implicits.catsSyntaxTuple6Semigroupal
+import cats.implicits.catsSyntaxTuple2Semigroupal
+import wolfcode.model.Offer.Car
 
 import java.time.OffsetDateTime
 
 case class Draft(id: Int,
                  ownerId: Long,
-                 description: Option[String],
-                 photoIds: List[String],
                  createTime: OffsetDateTime,
-                 brand: Option[String],
-                 model: Option[String],
-                 year: Option[Int],
-                 price: Option[Int]) {
+                 photoIds: List[String],
+                 car: Option[Car]) {
   def toOffer: Option[Offer] =
-    (description, NonEmptyList.fromList(photoIds), brand, model, year, price).mapN {
-      case (desc, pIds, brand, model, year, price) =>
+    (NonEmptyList.fromList(photoIds), car).mapN {
+      case (pIds, car) =>
         Offer(
           id = id,
           ownerId = ownerId,
-          description = desc,
           photoIds = PhotoIds(pIds.toList),
           publishTime = createTime,
-          brand = brand,
-          model = model,
-          year = year,
-          price = price
+          car = car
         )
     }
 }
@@ -36,13 +29,8 @@ object Draft {
     Draft(
       ownerId = ownerId,
       createTime = createTime,
-
       id = 0,
-      description = None,
       photoIds = List.empty,
-      brand = None,
-      model = None,
-      year = None,
-      price = None
+      car = None
     )
 }
