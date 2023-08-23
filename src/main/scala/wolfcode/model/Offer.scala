@@ -26,11 +26,11 @@ object Offer {
       s"""
          |${Emoji.car} ${brand.capitalize} ${model.capitalize}
          |
-         |Год: $year
-         |Цена: $price $$
          |Коробка: $transmission
-         |Руль: $steering
          |Пробег: $mileage
+         |Цена: $price $$
+         |Руль: $steering
+         |Год: $year
          |${if (description.isEmpty) "" else description + "\n"}
          |${Emoji.phone} $phone
          |${Emoji.city} $city
