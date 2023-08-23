@@ -1,0 +1,3 @@
+
+ALTER TABLE offers ALTER COLUMN description DROP NOT NULL;
+ALTER TABLE pending_offers ALTER COLUMN description DROP NOT NULL;

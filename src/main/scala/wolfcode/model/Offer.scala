@@ -12,7 +12,7 @@ case class Offer(id: Int,
                  car: Car)
 
 object Offer {
-  case class Car(description: String,
+  case class Car(description: Option[String],
                  brand: String,
                  model: String,
                  year: Int,

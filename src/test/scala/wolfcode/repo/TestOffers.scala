@@ -13,7 +13,7 @@ trait TestOffers {
   this: PostgresSetup =>
 
   val car = Offer.Car(
-    description = "",
+    description = None,
     brand = "kia",
     model = "k5",
     year = 2019,
