@@ -86,7 +86,13 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
           ).exec.void
       case Some("next") =>
         states.get.map(_.getOrElse(chatId, State.Idle)).flatMap {
-          case Viewing(offers) => sendOffers(offers.toList)
+          case Viewing(offers) =>
+            sendOffers(offers.toList) >>
+              Methods.editMessageReplyMarkup(
+                chatId = query.message.map(_.chat.id).map(ChatIntId),
+                messageId = query.message.map(_.messageId),
+                replyMarkup = None
+              ).exec.void
           case _ => IO.unit
         }
       case Some(x) if x.startsWith("contact") =>
