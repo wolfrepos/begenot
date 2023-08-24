@@ -163,17 +163,17 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
 
   private def sendInstructions(implicit chatId: Long): IO[Unit] =
     states.update(_.updated(chatId, State.Idle)) >>
-      Methods.sendVideo(
-        chatId = ChatIntId(chatId),
-        video = InputLinkFile(videoId)
-      ).exec.attempt.void >>
       sendText(
         s"""
            |${Emoji.car} Если Вы ищете машину - нажмите на кнопку поиска
            |
-           |${Emoji.car} Если хотите продать машину - отправьте фотографии машины
+           |${Emoji.car} Если хотите продать машину - отправьте фотографии
            |""".stripMargin
-      )
+      ) >>
+      Methods.sendAnimation(
+        chatId = ChatIntId(chatId),
+        animation = InputLinkFile(gifId)
+      ).exec.attempt.void
 
   private def sendOffers(offers: List[Offer])(implicit chatId: Long): IO[Unit] =
     offers match {
@@ -245,5 +245,5 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
   private val createButton = KeyboardButton(s"Заполнить форму", webApp = createWebApp.some)
   private val searchButton = KeyboardButton(s"Поиск", webApp = searchWebApp.some)
   private val defaultKeyboard = ReplyKeyboardMarkups.singleButton(searchButton, resizeKeyboard = true.some)
-  private val videoId = "BAACAgIAAxkBAAICImPuZ1R07Fv3Otv0av8naAOtX2A9AAKnJAACW1N4S7zjcGCYQfVrLgQ"
+  private val gifId = "CgACAgIAAxkBAAILs2TnONDVQckgXc9gtJIQ5k1PVmehAAKmMgAC_Wc5S0VrJpzEht51MAQ"
 }
