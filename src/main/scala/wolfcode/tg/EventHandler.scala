@@ -14,7 +14,7 @@ import telegramium.bots.high.keyboards.{InlineKeyboardMarkups, ReplyKeyboardMark
 import telegramium.bots.high.{Api, Methods}
 import wolfcode.model.State.{Drafting, Idle, Viewing}
 import wolfcode.model.{Draft, Offer, State, User => User0}
-import wolfcode.repo.{OfferRepo, PendingOfferRepo, UserRepo}
+import wolfcode.repo.{OfferRepo, PendingOfferRepo, QueriesRepo, UserRepo}
 import wolfcode.tg.CustomExtractors._
 import wolfcode.tg.Emoji
 
@@ -25,7 +25,8 @@ import scala.util.Random
 class EventHandler(states: Ref[IO, Map[Long, State]],
                    userRepo: UserRepo,
                    offerRepo: OfferRepo,
-                   pendingOfferRepo: PendingOfferRepo)(implicit api: Api[IO]) extends LongPoll[IO](api) {
+                   pendingOfferRepo: PendingOfferRepo,
+                   queriesRepo: QueriesRepo)(implicit api: Api[IO]) extends LongPoll[IO](api) {
   private val logger = Slf4jLogger.getLogger[IO]
   private val admins = List(108683062L)
 
@@ -41,8 +42,12 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
           parser.parse(data).flatMap(_.as[OfferRepo.Query]) match {
             case Left(error) => logger.info(s"Error parsing json: $error") >> sendInstructions
             case Right(q) =>
-              logger.info(s"Got data from webApp: $q") >>
-                offerRepo.query(q).flatMap(sendOffers)
+              for {
+                _ <- logger.info(s"Got data from webApp: $q")
+                offers <- offerRepo.query(q)
+                _ <- sendOffers(offers)
+                _ <- queriesRepo.put(chatId, OffsetDateTime.now, q)
+              } yield ()
           }
         case (state, PhotoId(photoId)) =>
           updateDraft(

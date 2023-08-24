@@ -6,6 +6,8 @@ import doobie.postgres.implicits._
 import doobie.util.fragments._
 import wolfcode.model.Offer
 
+import java.time.OffsetDateTime
+
 package object sql {
 
   private val offerFieldsWithoutId: Fragment =
@@ -71,4 +73,12 @@ package object sql {
 
   def deletePendingOffer(id: Int): Update0 =
     sql"DELETE FROM pending_offers where id = $id".update
+
+  def putQuery(userId: Long, queryTime: OffsetDateTime, query: OfferRepo.Query): Update0 = {
+    import query._
+    sql"""
+       INSERT INTO QUERIES (user_id, query_time, brand, model, yearr, transmission, steering, mileage, price_min, price_max, city)
+       VALUES ($userId, $queryTime, $brand, $model, $year, $transmission, $steering, $mileage, $priceMin, $priceMax, $city)
+       """.update
+  }
 }

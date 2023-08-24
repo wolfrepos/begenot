@@ -9,7 +9,7 @@ import org.http4s.client.Client
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import telegramium.bots.high._
 import wolfcode.model.State
-import wolfcode.repo.{OfferRepo, PendingOfferRepo, UserRepo}
+import wolfcode.repo.{OfferRepo, PendingOfferRepo, QueriesRepo, UserRepo}
 import wolfcode.tg.EventHandler
 
 object Main extends IOApp {
@@ -24,13 +24,15 @@ object Main extends IOApp {
         case (client, tx, ref) =>
           implicit val api: Api[IO] = BotApi(client, baseUrl = s"https://api.telegram.org/bot${config.token}")
           val pendingOfferRepository = PendingOfferRepo.create(tx)
-          val offerRepository = OfferRepo.create(tx)
-          val userRepository = UserRepo.create(tx)
+          val offerRepo = OfferRepo.create(tx)
+          val userRepo = UserRepo.create(tx)
+          val queriesRepo = QueriesRepo.create(tx)
           val longPollBot = new EventHandler(
             ref,
-            userRepository,
-            offerRepository,
-            pendingOfferRepository
+            userRepo,
+            offerRepo,
+            pendingOfferRepository,
+            queriesRepo
           )
           longPollBot.job.start >>
             longPollBot.start()

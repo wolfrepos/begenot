@@ -1,15 +1,13 @@
 package wolfcode.repo
 
-import cats.data.NonEmptyList
-import cats.effect.unsafe.implicits.global
 import cats.implicits.catsSyntaxOptionId
 import doobie.postgres.implicits._
 import doobie.scalatest.IOChecker
 import org.scalatest.funsuite.AnyFunSuite
 
-class OfferRepoTest extends AnyFunSuite with IOChecker with PostgresSetup with TestOffers {
-  private lazy val offerRepository = OfferRepo.create(transactor)
+import java.time.OffsetDateTime
 
+class QueriesCheck extends AnyFunSuite with IOChecker with PostgresSetup with TestOffers {
   val query = OfferRepo.Query(
     brand = "kia".some,
     model = "k5".some,
@@ -21,8 +19,10 @@ class OfferRepoTest extends AnyFunSuite with IOChecker with PostgresSetup with T
     priceMax = 19000.some,
     city = "bishkek".some
   )
+
   test("queries") {
     check(sql.putOffer(testOffers.head))
     check(sql.queryOffer(query))
+    check(sql.putQuery(1L, OffsetDateTime.now, query))
   }
 }
