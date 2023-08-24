@@ -201,6 +201,10 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
       photoIds = photoId.fold(draft.photoIds)(_ :: draft.photoIds)
     )
     newDraft.toOffer match {
+      case Some(offer) if admins.contains(chatId) =>
+        states.update(_.updated(chatId, Idle)) >>
+          offerRepo.put(offer) >>
+          sendText(s"${Emoji.check} Объявление опубликовано")
       case Some(offer) =>
         states.update(_.updated(chatId, Idle)) >>
           pendingOfferRepo.put(offer) >>
