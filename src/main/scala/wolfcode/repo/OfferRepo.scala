@@ -29,6 +29,10 @@ object OfferRepo {
   case class Query(brand: Option[String],
                    model: Option[String],
                    year: Option[Int],
-                   minPrice: Option[Int],
-                   maxPrice: Option[Int])
+                   transmission: Option[String],
+                   steering: Option[String],
+                   mileage: Option[Int],
+                   priceMin: Option[Int],
+                   priceMax: Option[Int],
+                   city: Option[String])
 }

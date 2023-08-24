@@ -31,8 +31,12 @@ package object sql {
       q.brand.map(x => fr"brand = $x"),
       q.model.map(x => fr"model = $x"),
       q.year.map(x => fr"yearr = $x"),
-      q.minPrice.map(x => fr"price >= $x"),
-      q.maxPrice.map(x => fr"price <= $x"),
+      q.transmission.map(x => fr"transmission = $x"),
+      q.steering.map(x => fr"steering = $x"),
+      q.mileage.map(x => fr"mileage <= $x"),
+      q.priceMin.map(x => fr"price >= $x"),
+      q.priceMax.map(x => fr"price <= $x"),
+      q.city.map(x => fr"city = $x"),
     )
   }.query[Offer]
 
