@@ -245,5 +245,5 @@ class EventHandler(states: Ref[IO, Map[Long, State]],
   private val createButton = KeyboardButton(s"Заполнить форму", webApp = createWebApp.some)
   private val searchButton = KeyboardButton(s"Поиск", webApp = searchWebApp.some)
   private val defaultKeyboard = ReplyKeyboardMarkups.singleButton(searchButton, resizeKeyboard = true.some)
-  private val gifId = "CgACAgIAAxkBAAILs2TnONDVQckgXc9gtJIQ5k1PVmehAAKmMgAC_Wc5S0VrJpzEht51MAQ"
+  private val gifId = "CgACAgIAAxkBAAILwmTnZTtEDzkvQmCd-g8OMFu6bvG4AAKyNQAC_WdBS8_oAAEoCXo1gzAE"
 }
