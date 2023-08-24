@@ -26,14 +26,35 @@ object Offer {
       s"""
          |${Emoji.car} ${brand.capitalize} ${model.capitalize}
          |
-         |Коробка: $transmission
+         |Коробка: ${showTransmission(transmission)}
          |Пробег: $mileage
          |Цена: $price $$
-         |Руль: $steering
+         |Руль: ${showSteering(steering)}
          |Год: $year
-         |${if (description.isEmpty) "" else description + "\n"}
+         |${description.fold("")(_ + "\n")}
          |${Emoji.phone} $phone
-         |${Emoji.city} $city
+         |${Emoji.city} ${showCity(city)}
          |""".stripMargin
+
+    def showTransmission(s: String): String =
+      s match {
+        case "automatic" => "Автомат"
+        case "manual" => "Механика"
+        case _ => s
+      }
+
+    def showSteering(s: String): String =
+      s match {
+        case "left" => "Левый"
+        case "right" => "Правый"
+        case _ => s
+      }
+
+    def showCity(s: String): String =
+      s match {
+        case "bishkek" => "Бишкек"
+        case "osh" => "Ош"
+        case _ => s
+      }
   }
 }
